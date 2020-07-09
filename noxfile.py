@@ -9,13 +9,13 @@ import nox
 def tests(session):
     """Run all tests."""
     session.install(".")
-    session.install("-r", "./requirements-dev.txt")
     session.install("-r", "./requirements-test.txt")
 
-    cmd = ["pytest", "-n", "auto"]
+    cmd = ["pytest"]
     if session.posargs:
         cmd.extend(session.posargs)
     session.run(*cmd)
+    session.run("make", "clean")
 
 
 @nox.session(reuse_venv=True, python="3.7")
@@ -38,7 +38,9 @@ def bandit(session):
 @nox.session(reuse_venv=True, python="3.7")
 def sphinx_build(session):
     """Build docs with sphinx."""
-    session.install("-r", "requirements-test.txt")
+    session.install(".")
+    session.install("git+https://github.com/sphinx-doc/sphinx")
     session.run(
         "sphinx-build", "-q", "-W", "-E", "-n", "-b", "html", "docs", "docs/_build/html"
     )
+    session.run("make", "clean", external=True)
