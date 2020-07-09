@@ -91,3 +91,6 @@ ghostdriver.log
 
 # vim
 **.swp
+
+# nox
+.nox/*
