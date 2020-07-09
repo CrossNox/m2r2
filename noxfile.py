@@ -18,6 +18,22 @@ def tests(session):
     session.run("make", "clean", external=True)
 
 
+@nox.session(
+    reuse_venv=True, python=["2.7", "3.4", "3.5", "3.6", "3.7", "3.8", "pypy", "pypy3"]
+)
+def tests_old_sphinx(session):
+    """Run all tests."""
+    session.install(".")
+    session.install("-r", "./requirements-test.txt")
+    session.install("sphinx==1.7.0")
+
+    cmd = ["pytest"]
+    if session.posargs:
+        cmd.extend(session.posargs)
+    session.run(*cmd)
+    session.run("make", "clean", external=True)
+
+
 @nox.session(reuse_venv=True, python="3.7")
 def cop(session):
     """Run all pre-commit hooks."""
