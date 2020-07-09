@@ -40,7 +40,7 @@ This is a simple sentence.
 | newlines
 | (reST)
 
-Sentence with  
+Sentence with
 hard-wrap (markdown, trailing two spaces)
 
 > block quote
