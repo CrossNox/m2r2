@@ -24,13 +24,15 @@ if sys.version_info < (3, 3):
     test_requirements.append("mock")
 
 setup(
-    name="m2r",
-    version="0.2.2",
+    name="m2r2",
+    version="0.2.3",
     description="Markdown and reStructuredText in a single file.",
     long_description=readme,
     author="Hiroyuki Takagi",
     author_email="miyako.dev@gmail.com",
-    url="https://github.com/miyakogi/m2r",
+    maintainer="CrossNox",
+    maintainer_email="ijmermet+m2r2@gmail.com",
+    url="https://github.com/crossnox/m2r",
     py_modules=["m2r"],
     entry_points={"console_scripts": "m2r = m2r:main"},
     include_package_data=True,

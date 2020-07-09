@@ -1,16 +1,21 @@
-M2R
-===
+M2R2
+====
 
-[![PyPI](https://img.shields.io/pypi/v/m2r.svg)](https://pypi.python.org/pypi/m2r)
-[![PyPI version](https://img.shields.io/pypi/pyversions/m2r.svg)](https://pypi.python.org/pypi/m2r)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://miyakogi.github.io/m2r)
-[![Build Status](https://travis-ci.org/miyakogi/m2r.svg?branch=master)](https://travis-ci.org/miyakogi/m2r)
-[![codecov](https://codecov.io/gh/miyakogi/m2r/branch/master/graph/badge.svg)](https://codecov.io/gh/miyakogi/m2r)
+[![PyPI](https://img.shields.io/pypi/v/m2r2.svg)](https://pypi.python.org/pypi/m2r2)
+[![PyPI version](https://img.shields.io/pypi/pyversions/m2r2.svg)](https://pypi.python.org/pypi/m2r2)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://crossnox.github.io/m2r)
+![Python package](https://github.com/CrossNox/m2r/workflows/Python%20package/badge.svg)
 
 --------------------------------------------------------------------------------
 
 M2R converts a markdown file including reStructuredText (rst) markups to a valid
 rst format.
+
+## M2R: the original
+M2R2 is a fork of [m2r](https://github.com/miyakogi/m2r) which hasn't been updated for a long time
+and there's been no response from the author about a PR fixing a serious issue that broke several
+pipelines using `sphinx3`. I've changed some of the tooling for what I'm mostly using now. Below goes
+the original readme.
 
 ## Why another converter?
 
@@ -164,6 +169,13 @@ Demo editor of m2r is available.
 If you are interested in m2r, please try it.
 
 [https://github.com/miyakogi/m2rdemo](https://github.com/miyakogi/m2rdemo)
+
+## Dev install
+Please install the `dev` dependencies and `pre-commit` hooks with:
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
 
 ## Acknowledgement
 

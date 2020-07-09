@@ -1,5 +1,10 @@
 ## Version 0.3.0
 
+### Version 0.2.3 (2020-07-09)
+* Fix https://github.com/miyakogi/m2r/issues/51
+* Change `tox` for `nox`
+* Add `pre-commit` hooks and fix styling
+
 ### Version 0.2.1 (2018-10-12)
 
 * Add `--disable-inline-math` and `m2r_disable_inline_math` sphinx option
