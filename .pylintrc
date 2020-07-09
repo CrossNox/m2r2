@@ -1,0 +1,12 @@
+[FORMAT]
+# Good variable names which should always be accepted, separated by a comma
+good-names=i,j,k,e,_,pk,x,y,f,logger,config,df,a,h3,ul,li,td,app,api,ma
+
+[MISCELLANEOUS]
+# List of note tags to take in consideration, separated by a comma.
+notes=XXX
+ignored-classes=SQLObject,Registrant,scoped_session
+
+[MESSAGES CONTROL]
+disable=bad-continuation,too-many-locals,len-as-condition
+

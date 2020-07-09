@@ -1,0 +1,5 @@
+[flake8]
+
+ignore =
+	E501, # pylint already does this
+	W503, # https://github.com/psf/black/issues/113

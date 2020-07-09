@@ -1,0 +1,52 @@
+repos:
+-   repo: git://github.com/pre-commit/pre-commit-hooks
+    rev: v2.5.0
+    hooks:
+    - id: trailing-whitespace
+    - id: requirements-txt-fixer
+    - id: flake8
+      name: flake8
+      entry: flake8
+      language: system
+      types: [python]
+      args: [--max-line-length=88]
+      exclude: (docs|tests)/*
+-   repo: https://github.com/pre-commit/mirrors-isort
+    rev: v5.0.6
+    hooks:
+    - id: isort
+      name: isort
+      entry: isort
+      language: system
+      types: [python]
+      args: [--multi-line=3,--trailing-comma,--force-grid-wrap=0,--use-parentheses,--line-width=88]
+      exclude: (docs|tests)/*
+-   repo: https://github.com/psf/black
+    rev: 19.10b0
+    hooks:
+    - id: black
+      name: black
+      entry: black
+      language: system
+      types: [python]
+      args: []
+      language_version: python3.7
+      exclude: (docs|tests)/*
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.770
+    hooks:
+    - id: mypy
+      name: mypy
+      entry: mypy
+      language: system
+      types: [python]
+      exclude: (tests|docs)/*
+-   repo: https://github.com/pre-commit/mirrors-pylint
+    rev: v2.4.4
+    hooks:
+    - id: pylint
+      name: pylint
+      entry: pylint
+      language: system
+      types: [python]
+      exclude: (tests|docs)*
