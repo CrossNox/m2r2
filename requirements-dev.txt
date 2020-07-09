@@ -1,4 +1,10 @@
 -r requirements-test.txt
+black==19.10b0
+flake8==3.7.8
+isort==4.3.21
 livereload
+mypy==0.770
 nox
-pre-commit
+pre-commit==2.2.0
+pylint==2.4.4
+

@@ -9,7 +9,8 @@ import nox
 def tests(session):
     """Run all tests."""
     session.install(".")
-    session.install("-r", "requirements-test.txt")
+    session.install("-r", "./requirements-dev.txt")
+    session.install("-r", "./requirements-test.txt")
 
     cmd = ["pytest", "-n", "auto"]
     if session.posargs:
