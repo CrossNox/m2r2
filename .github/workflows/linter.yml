@@ -1,0 +1,14 @@
+name: Run linters and formatters
+
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install dependencies
+      run: |
+        pip install nox
+    - name: Run cop session
+      run: |
+        nox --sessions cop

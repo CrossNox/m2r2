@@ -20,5 +20,10 @@ jobs:
       run: |
         pip install nox
         nox --sessions tests --python ${{ matrix.python-version }}
+    - name: Test old sphinx building
+      run: |
         nox --sessions test_sphinx_old_build --python ${{ matrix.python-version }}
+    - name: Test sphinx building
+      run: |
         nox --sessions test_sphinx_build --python ${{ matrix.python-version }}
+
