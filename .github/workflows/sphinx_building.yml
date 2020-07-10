@@ -1,0 +1,19 @@
+name: Check sphinx building
+
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - name: Install dependencies
+      run: pip install nox
+    - name: Build with an old sphinx version
+      run: nox --sessions test_sphinx_old_build
+    - name: Build with latest sphinx version
+      run: nox --sessions test_sphinx_build
