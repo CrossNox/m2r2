@@ -13,8 +13,7 @@ jobs:
       run: |
         python setup.py sdist bdist_wheel
     - name: Build package
-      run: |
-        pip install wheel
+      run: pip install wheel
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@master
       with:

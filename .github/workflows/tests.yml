@@ -16,14 +16,12 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: pip install nox
     - name: Run tests session
-      run: |
-        pip install nox
-        nox --sessions tests --python ${{ matrix.python-version }}
+      run: nox --sessions tests --python ${{ matrix.python-version }}
     - name: Test old sphinx building
-      run: |
-        nox --sessions test_sphinx_old_build --python ${{ matrix.python-version }}
+      run: nox --sessions test_sphinx_old_build --python ${{ matrix.python-version }}
     - name: Test sphinx building
-      run: |
-        nox --sessions test_sphinx_build --python ${{ matrix.python-version }}
+      run: nox --sessions test_sphinx_build --python ${{ matrix.python-version }}
 
