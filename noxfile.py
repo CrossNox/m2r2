@@ -1,5 +1,7 @@
 """Entrypoint for nox."""
 
+import tempfile
+
 import nox
 
 
@@ -10,22 +12,6 @@ def tests(session):
     """Run all tests."""
     session.install(".")
     session.install("-r", "./requirements-test.txt")
-
-    cmd = ["pytest"]
-    if session.posargs:
-        cmd.extend(session.posargs)
-    session.run(*cmd)
-    session.run("make", "clean", external=True)
-
-
-@nox.session(
-    reuse_venv=True, python=["2.7", "3.4", "3.5", "3.6", "3.7", "3.8", "pypy", "pypy3"]
-)
-def tests_old_sphinx(session):
-    """Run all tests."""
-    session.install(".")
-    session.install("-r", "./requirements-test.txt")
-    session.install("sphinx==1.7.0")
 
     cmd = ["pytest"]
     if session.posargs:
@@ -52,11 +38,18 @@ def bandit(session):
 
 
 @nox.session(reuse_venv=True, python="3.7")
-def sphinx_build(session):
+def test_sphinx_old_build(session):
     """Build docs with sphinx."""
-    session.install(".")
-    session.install("git+https://github.com/sphinx-doc/sphinx")
-    session.run(
-        "sphinx-build", "-q", "-W", "-E", "-n", "-b", "html", "docs", "docs/_build/html"
-    )
-    session.run("make", "clean", external=True)
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        session.install(".")
+        session.install("sphinx==1.7.0")
+        session.run("sphinx-build", "-W", "-E", "-n", "-b", "html", "docs", tmpdirname)
+
+
+@nox.session(reuse_venv=True, python="3.7")
+def test_sphinx_build(session):
+    """Build docs with sphinx."""
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        session.install(".")
+        session.install("sphinx")
+        session.run("sphinx-build", "-W", "-E", "-n", "-b", "html", "docs", tmpdirname)

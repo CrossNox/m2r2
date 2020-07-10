@@ -20,4 +20,5 @@ jobs:
       run: |
         pip install nox
         nox --sessions tests --python ${{ matrix.python-version }}
-        nox --sessions tests_old_sphinx --python ${{ matrix.python-version }}
+        nox --sessions test_sphinx_old_build --python ${{ matrix.python-version }}
+        nox --sessions test_sphinx_build --python ${{ matrix.python-version }}
