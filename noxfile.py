@@ -17,7 +17,6 @@ def tests(session):
     if session.posargs:
         cmd.extend(session.posargs)
     session.run(*cmd)
-    session.run("make", "clean", external=True)
 
 
 @nox.session(reuse_venv=True, python="3.7")

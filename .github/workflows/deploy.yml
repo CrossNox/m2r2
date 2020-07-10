@@ -7,14 +7,15 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
     steps:
+    - name: Install dependencies
+      run: |
+        python setup.py sdist bdist_wheel
     - name: Build package
-      #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
       run: |
         pip install wheel
-        python setup.py sdist bdist_wheel
     - name: Publish package
-      #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
       uses: pypa/gh-action-pypi-publish@master
       with:
         user: __token__
