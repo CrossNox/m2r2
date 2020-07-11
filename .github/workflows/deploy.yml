@@ -5,17 +5,55 @@ on:
     branches: master
 
 jobs:
-  deploy:
+  untagged_deploy:
     runs-on: ubuntu-latest
-    #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
     steps:
     - name: Install dependencies
-      run: |
-        python setup.py sdist bdist_wheel
-    - name: Build package
       run: pip install wheel
-    - name: Publish package
+    - name: Build package
+      run: python setup.py sdist bdist_wheel
+    - name: Publish package to Test PyPI
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.test_pypi_token }}
+        repository_url: https://test.pypi.org/legacy/
+  tagged_deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    steps:
+    - name: Install dependencies
+      run: pip install wheel
+    - name: Build package
+      run: python setup.py sdist bdist_wheel
+    - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@master
       with:
         user: __token__
         password: ${{ secrets.pypi_token }}
+    - name: Update docs
+      uses: ammaraskar/sphinx-action@master
+      with:
+        docs-folder: "docs/"
+    - name: Create artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: DocumentationHTML
+        path: docs/_build/html/
+    - name: Commit documentation changes
+      run: |
+        git clone https://github.com/crossnox/m2r.git --branch gh-pages --single-branch gh-pages
+        cp -r docs/_build/html/* gh-pages/
+        cd gh-pages
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Update documentation ${{ github.ref }}" -a || true
+        # The above command will fail if no changes were present, so we ignore
+        # that.
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        branch: gh-pages
+        directory: gh-pages
+        github_token: ${{ secrets.GH_TOKEN }}
