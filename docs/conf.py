@@ -133,7 +133,7 @@ html_theme = 'alabaster'
 html_theme_options = {
     'description': 'Markdown mixed to reST',
     'github_user': 'CrossNox',
-    'github_repo': 'm2r',
+    'github_repo': 'm2r2',
     'github_banner': True,
     'github_type': 'mark',
     'github_count': False,

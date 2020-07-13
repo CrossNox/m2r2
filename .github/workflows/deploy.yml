@@ -56,7 +56,7 @@ jobs:
         path: docs/_build/html/
     - name: Commit documentation changes
       run: |
-        git clone https://github.com/crossnox/m2r.git --branch gh-pages --single-branch gh-pages
+        git clone https://github.com/crossnox/m2r2.git --branch gh-pages --single-branch gh-pages
         cp -r docs/_build/html/* gh-pages/
         cd gh-pages
         git config --local user.email "action@github.com"
