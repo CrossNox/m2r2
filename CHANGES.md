@@ -1,5 +1,8 @@
 ## Version 0.3.0
 
+### Version 0.2.5 (2020-07-13)
+* Update repo name in every reference
+
 ### Version 0.2.4 (2020-07-12)
 * Central versioning
 * Add bump
