@@ -6,7 +6,8 @@ import nox
 
 
 @nox.session(
-    reuse_venv=True, python=["2.7", "3.4", "3.5", "3.6", "3.7", "3.8", "pypy", "pypy3"]
+    reuse_venv=True,
+    python=["2.7", "3.4", "3.5", "3.6", "3.7", "3.8", "3.9", "pypy", "pypy3"],
 )
 def tests(session):
     """Run all tests."""
