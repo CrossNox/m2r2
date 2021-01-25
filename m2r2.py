@@ -119,10 +119,10 @@ class RestInlineGrammar(mistune.InlineGrammar):
     )
     rest_role = re.compile(r":.*?:`.*?`|`[^`]+`:.*?:")
     rest_link = re.compile(r"`[^`]*?`_")
-    inline_math = re.compile(r"`\$(.*?)\$`")
+    inline_math = re.compile(r"\$`(.*?)`\$")
     eol_literal_marker = re.compile(r"(\s+)?::\s*$")
-    # add colon and space as special text
-    text = re.compile(r"^[\s\S]+?(?=[\\<!\[:_*`~ ]|https?://| {2,}\n|$)")
+    # add colon, dollar and space as special text
+    text = re.compile(r"^[\s\S]+?(?=[\\<!\[:_*`~$ ]|https?://| {2,}\n|$)")
     # __word__ or **word**
     double_emphasis = re.compile(r"^([_*]){2}(?P<text>[\s\S]+?)\1{2}(?!\1)")
     # _word_ or *word*

@@ -136,5 +136,5 @@ class TestConvert(TestCase):
         sys.argv = [sys.argv[0], '--disable-inline-math', '--dry-run', test_md]
         with patch(_builtin + '.print') as m:
             main()
-        self.assertIn('``$E = mc^2$``', m.call_args[0][0])
+        self.assertIn(r'$\ ``E = mc^2``\ $', m.call_args[0][0])
         self.assertNotIn(':math:', m.call_args[0][0])
