@@ -205,6 +205,7 @@ class RestRenderer(mistune.Renderer):
     def __init__(self, *args, **kwargs):
         self.parse_relative_links = kwargs.pop("parse_relative_links", False)
         self.anonymous_references = kwargs.pop("anonymous_references", False)
+        self.use_mermaid = kwargs.pop("use_mermaid", False)
         super(RestRenderer, self).__init__(*args, **kwargs)
         if not _is_sphinx:
             parse_options()
@@ -225,6 +226,8 @@ class RestRenderer(mistune.Renderer):
     def block_code(self, code, lang=None):
         if lang == "math":
             first_line = "\n.. math::\n\n"
+        elif lang == "mermaid" and self.use_mermaid:
+            first_line = "\n.. mermaid::\n\n"
         elif lang:
             first_line = "\n.. code-block:: {}\n\n".format(lang)
         elif _is_sphinx:
@@ -563,6 +566,7 @@ class M2RParser(rst.Parser, object):
             parse_relative_links=config.m2r_parse_relative_links,
             anonymous_references=config.m2r_anonymous_references,
             disable_inline_math=config.m2r_disable_inline_math,
+            use_mermaid=config.m2r_use_mermaid,
         )
         super(M2RParser, self).parse(converter(inputstring), document)
 
@@ -644,6 +648,7 @@ class MdInclude(rst.Directive):
             parse_relative_links=config.m2r_parse_relative_links,
             anonymous_references=config.m2r_anonymous_references,
             disable_inline_math=config.m2r_disable_inline_math,
+            use_mermaid=config.m2r_use_mermaid,
         )
         include_lines = statemachine.string2lines(
             converter(rawtext), tab_width, convert_whitespace=True
@@ -660,6 +665,7 @@ def setup(app):
     app.add_config_value("m2r_parse_relative_links", False, "env")
     app.add_config_value("m2r_anonymous_references", False, "env")
     app.add_config_value("m2r_disable_inline_math", False, "env")
+    app.add_config_value("m2r_use_mermaid", "sphinxcontrib.mermaid" in app.config.extensions, "env")
     try:
         app.add_source_parser(".md", M2RParser)  # for older sphinx versions
     except (TypeError, AttributeError):
