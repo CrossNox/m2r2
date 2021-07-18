@@ -21,3 +21,17 @@ graph TD;
     B-->D;
     C-->D;
 ```
+
+<h4>Some text before</h4>
+
+<details><summary>Expand (CLICK ME)</summary>
+
+Large Markdown formatted text:
+- a1
+- a2
+- a3
+- a4
+
+</details>
+
+Last bit of text.

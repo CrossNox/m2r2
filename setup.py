@@ -19,7 +19,7 @@ except ImportError:
         readme = f.read()
 
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 install_requires = ["mistune", "docutils"]
 test_requirements = ["pygments"]

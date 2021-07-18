@@ -1,3 +1,6 @@
+### Version 0.4.0 (2021-07-18)
+* Add support for detail HTML block
+
 ### Version 0.3.1 (2021-07-13)
 * Fix argparse for python3.10
 

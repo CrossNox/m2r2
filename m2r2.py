@@ -246,6 +246,21 @@ class RestRenderer(mistune.Renderer):
 
         :param html: text content of the html snippet.
         """
+        details = re.search(
+            r"<details>\s*(<summary>[\s\S]*<\/summary>)([\S\s]*)<\/details>", html,
+        )
+        if details is not None:
+            summary, block = details.groups()
+            retstr = "\n\n.. raw:: html\n\n" + self._indent_block("<details>")
+            if summary != "":
+                retstr += summary
+            retstr += "\n\n"
+            retstr += "__reprocess_m2r_0__" + block + "__reprocess_m2r_1__"
+            retstr += (
+                "\n\n.. raw:: html\n\n" + self._indent_block("</details>") + "\n\n"
+            )
+            return retstr
+
         return "\n\n.. raw:: html\n\n" + self._indent_block(html) + "\n\n"
 
     def header(self, text, level, raw=None):
@@ -530,6 +545,12 @@ class M2R(mistune.Markdown):
 
     def parse(self, text):
         output = super(M2R, self).parse(text)
+        if "__reprocess_m2r_0__" in output:
+            output = re.sub(
+                r"__reprocess_m2r_0__([\s\S]*)__reprocess_m2r_1__",
+                lambda g: self.parse(g.group(1)),
+                output,
+            )
         return self.post_process(output)
 
     def output_directive(self):

@@ -25,3 +25,31 @@ Also within parentheses (:math:`x^2`) and (:math:`z^3`).
        A-->C;
        B-->D;
        C-->D;
+
+
+.. raw:: html
+
+   <h4>Some text before</h4>
+
+
+
+.. raw:: html
+
+   <details><summary>Expand (CLICK ME)</summary>
+
+
+Large Markdown formatted text:
+
+
+* a1
+* a2
+* a3
+* a4
+
+
+.. raw:: html
+
+   </details>
+
+
+Last bit of text.
