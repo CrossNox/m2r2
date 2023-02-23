@@ -1,6 +1,10 @@
 name: Run bandit
 
-on: [push]
+on:
+  push:
+    branches: development
+  pull_request:
+    branches: development
 
 jobs:
   deploy:
