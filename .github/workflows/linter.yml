@@ -1,19 +1,21 @@
 name: Run linters and formatters
 
-on: [push]
+on:
+  push:
+    branches: development
+  pull_request:
+    branches: development
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Set up Python 3.7
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: 3.7
-    - name: Install nox
-      run: pip install nox
-    - name: Install dependencies
-      run: pip install -r requirements-dev.txt
+    - name: Install nox and dependencies
+      run: pip install nox -r requirements-dev.txt
     - name: Run cop session
       run: nox --sessions cop
