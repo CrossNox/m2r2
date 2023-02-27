@@ -264,14 +264,14 @@ class TestInlineMarkdown(RendererTestBase):
         self.assertEqual(out, '\na ``code`` and `RefLink <a>`_ here.\n')
 
     def test_inline_math(self):
-        src = 'this is `$E = mc^2$` inline math.'
+        src = 'this is $`E = mc^2`$ inline math.'
         out = self.conv(src)
         self.assertEqual(out, '\nthis is :math:`E = mc^2` inline math.\n')
 
     def test_disable_inline_math(self):
-        src = 'this is `$E = mc^2$` inline math.'
+        src = 'this is $`E = mc^2`$ inline math.'
         out = self.conv(src, disable_inline_math=True)
-        self.assertEqual(out, '\nthis is ``$E = mc^2$`` inline math.\n')
+        self.assertEqual(out, '\nthis is $\\ ``E = mc^2``\\ $ inline math.\n')
 
     def test_inline_html(self):
         src = 'this is <s>html</s>.'
