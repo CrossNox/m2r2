@@ -21,7 +21,7 @@ except ImportError:
 
 __version__ = "0.3.3.post2"
 
-install_requires = ["mistune==0.8.4", "docutils>=0.19"]
+install_requires = ["mistune==0.8.4", "docutils>=0.19", "setuptools"]
 test_requirements = ["pygments"]
 if sys.version_info < (3, 3):
     test_requirements.append("mock")
