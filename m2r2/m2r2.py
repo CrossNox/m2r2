@@ -56,7 +56,7 @@ class RestRenderer(BaseRenderer):
         return r"\ :raw-html-m2r:`{}`\ ".format(html)
 
     def block_text(self, text) -> str:
-        print(f"block_text={text}")
+        # print(f"block_text={text}")
         return f"{text}\n"
 
     def newline(self):
@@ -298,6 +298,105 @@ class RestBlockParser(mistune.BlockParser):
     def parse_rest_code_block(self, match: Match, state: State) -> Token:
         return {"type": "rest_code_block", "text": ""}
 
+    def parse_list_start(self, m, state, string):
+        print(f"{m=} {state=} {string=}")
+        # breakpoint()
+        items = []
+        spaces = m.group(1)
+        marker = m.group(2)
+        items, pos = _find_list_items(string, m.start(), spaces, marker)
+        tight = "\n\n" not in "".join(items).strip()
+        print(f"{items=} {tight=} {spaces=} {pos=}")
+        ordered = len(marker) != 1
+        if ordered:
+            start = int(marker[:-1])
+            if start == 1:
+                start = None
+        else:
+            start = None
+
+        list_tights = state.get("list_tights", [])
+        list_tights.append(tight)
+        state["list_tights"] = list_tights
+
+        depth = len(list_tights) + 1 if spaces != "" else 0
+        print(f"{depth=}")
+        rules = self.get_list_rules(depth)
+        children = [self.parse_list_item(item, depth, state, rules) for item in items]
+        list_tights.pop()
+        params = (ordered, depth, start)
+        print(f"{ordered=} {depth=} {start=}")
+        token = {"type": "list", "children": children, "params": params}
+        print()
+        return token, pos
+
+    def parse_list_item(self, text, depth, state, rules):
+        print("=" * 50)
+        print(f"parse_list_item {text=} {depth=} {state=} {rules}")
+        print("=" * 50)
+        text = self.normalize_list_item_text(text)
+        if not text:
+            children = [{"type": "block_text", "text": ""}]
+        else:
+            children = self.parse(text, state, rules)
+        return {
+            "type": "list_item",
+            "params": (depth,),
+            "children": children,
+        }
+
+
+def _create_list_item_pattern(spaces, marker):
+    prefix = r"( {0," + str(len(spaces) + len(marker)) + r"})"
+
+    if len(marker) > 1:
+        if marker[-1] == ".":
+            prefix = prefix + r"\d{0,9}\."
+        else:
+            prefix = prefix + r"\d{0,9}\)"
+    else:
+        prefix = prefix + re.escape(marker)
+
+    s1 = " {" + str(len(marker) + 1) + ",}"
+    if len(marker) > 4:
+        s2 = " {" + str(len(marker) - 4) + r",}\t"
+    else:
+        s2 = r" *\t"
+    return re.compile(
+        prefix + r"(?:[ \t]*|[ \t]+[^\n]+)\n+"
+        r"(?:\1(?:" + s1 + "|" + s2 + ")"
+        r"[^\n]+\n+)*"
+    )
+
+
+def _find_list_items(string, pos, spaces, marker):
+    breakpoint()
+    items = []
+
+    if marker in {"*", "-"}:
+        is_hr = re.compile(r" *((?:-[ \t]*){3,}|(?:\*[ \t]*){3,})\n+")
+    else:
+        is_hr = None
+
+    pattern = _create_list_item_pattern(spaces, marker)
+    while 1:
+        m = pattern.match(string, pos)
+        if not m:
+            break
+
+        text = m.group(0)
+        if is_hr and is_hr.match(text):
+            break
+
+        new_spaces = m.group(1)
+        if new_spaces != spaces:
+            spaces = new_spaces
+            pattern = _create_list_item_pattern(spaces, marker)
+
+        items.append(text)
+        pos = m.end()
+    return items, pos
+
 
 class RestInlineParser(mistune.InlineParser):
     INLINE_MATH = r"`\$(.*?)\$`"
@@ -340,7 +439,6 @@ class RestInlineParser(mistune.InlineParser):
 
     def parse_image_link(self, match: Match, state: State) -> Element:
         """Parse image link."""
-        # TODO: document the hell of re.scanner
         alt, src, _, target, _ = re.match(self.IMAGE_LINK, match.group()).groups()
         return "image_link", src, target, alt
 
@@ -354,8 +452,6 @@ class RestInlineParser(mistune.InlineParser):
 
     def parse_inline_math(self, match: Match, state: State) -> Element:
         """Pass through rest link."""
-        # WHY HERE TOO
-        # TODO: CRY
         return "inline_math", match.group().strip("`").strip("$")
 
     def parse_eol_literal_marker(self, match: Match, state: State) -> Element:
