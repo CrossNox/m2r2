@@ -370,7 +370,7 @@ def _create_list_item_pattern(spaces, marker):
 
 
 def _find_list_items(string, pos, spaces, marker):
-    breakpoint()
+    # breakpoint()
     items = []
 
     if marker in {"*", "-"}:
