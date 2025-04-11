@@ -11,8 +11,8 @@ m2r2 = "m2r2:main"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4"
-mistune = ">=2.0,<3.0"
-docutils = ">=0.16,<0.22"
+mistune = ">=3.0"
+docutils = ">=0.21.2"
 
 [tool.poetry.group.dev.dependencies]
 pygments = "^2.18.0"

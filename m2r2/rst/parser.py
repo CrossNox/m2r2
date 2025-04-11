@@ -2,7 +2,6 @@ import re
 from typing import Match
 
 import mistune
-
 from m2r2.typing import Element, State, Token
 
 # TODO: fix global
@@ -22,17 +21,12 @@ class RestBlockParser(mistune.BlockParser):
         r"^::\s*$",
         re.DOTALL | re.MULTILINE,
     )
-    RULE_NAMES = mistune.BlockParser.RULE_NAMES + (
-        "directive",
-        "oneline_directive",
-        "rest_code_block",
-    )
 
-    RULE_NAMES = (
+    DEFAULT_RULES = (
         "directive",
         "oneline_directive",
         "rest_code_block",
-    ) + mistune.BlockParser.RULE_NAMES
+    ) + mistune.BlockParser.DEFAULT_RULES
 
     def parse_directive(self, match: Match, state: State) -> Token:
         return {"type": "directive", "text": match.group(1)}
@@ -64,21 +58,21 @@ class RestInlineParser(mistune.InlineParser):
         r"^\*(?P<text>(?:\*\*|[^\*])+?)\*(?!\*)"  # *word*
     )
 
-    RULE_NAMES = (
+    DEFAULT_RULES = (
         "inline_math",
         "image_link",
         "rest_role",
         "rest_link",
         "eol_literal_marker",
-    ) + mistune.InlineParser.RULE_NAMES
+    ) + mistune.InlineParser.DEFAULT_RULES
 
     def parse_double_emphasis(self, match: Match, state: State) -> Element:
         # may include code span
         return "double_emphasis", match.group("text")
 
-    def parse_emphasis(self, match: Match, state: State) -> Element:
+    def parse_emphasis(self, m: Match, state: State) -> Element:
         # may include code span
-        return "emphasis", match.group("text") or match.group(1)
+        return "emphasis", m.group("text") or m.group(1)
 
     def parse_image_link(self, match: Match, state: State) -> Element:
         """Pass through rest role."""
@@ -116,11 +110,11 @@ class RestInlineParser(mistune.InlineParser):
         #    parse_options()
         # if no_underscore_emphasis or getattr(options, "no_underscore_emphasis", False):
         #    self.rules.no_underscore_emphasis()
-        inline_maths = "inline_math" in self.RULE_NAMES
+        inline_maths = "inline_math" in self.DEFAULT_RULES
         if disable_inline_math:  # or getattr(options, "disable_inline_math", False):
             if inline_maths:
-                self.RULE_NAMES = tuple(
-                    x for x in self.RULE_NAMES if x != "inline_math"
+                self.DEFAULT_RULES = tuple(
+                    x for x in self.DEFAULT_RULES if x != "inline_math"
                 )
         elif not inline_maths:
-            self.RULE_NAMES = ("inline_math", *self.RULE_NAMES)
+            self.DEFAULT_RULES = ("inline_math", *self.DEFAULT_RULES)

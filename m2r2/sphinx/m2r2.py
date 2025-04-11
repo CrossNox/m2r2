@@ -1,4 +1,4 @@
-from m2r2.m2r2 import __version__
+from m2r2 import __version__
 from m2r2.parser import M2R2Parser
 from m2r2.rst.directives import MdInclude
 

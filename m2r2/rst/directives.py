@@ -2,7 +2,6 @@ import os
 
 from docutils import io, nodes, statemachine, utils
 from docutils.parsers import rst
-
 from m2r2 import M2R2
 
 
@@ -34,7 +33,6 @@ class MdInclude(rst.Directive):
         path = rst.directives.path(self.arguments[0])
         path = os.path.normpath(os.path.join(source_dir, path))
         path = utils.relative_path(None, path)
-        path = nodes.reprunicode(path)
 
         # get options (currently not use directive-specific options)
         encoding = self.options.get(
