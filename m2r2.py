@@ -13,7 +13,11 @@ import mistune
 from docutils import io, nodes, statemachine, utils
 from docutils.parsers import rst
 from docutils.utils import column_width
-from pkg_resources import get_distribution
+
+try:
+    from pkg_resources import get_distribution
+except ImportError:
+    from importlib.metadata import distribution as get_distribution
 
 __version__ = get_distribution("m2r2").version
 
