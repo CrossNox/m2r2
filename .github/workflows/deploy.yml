@@ -16,9 +16,9 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel setuptools
+        run: pip install -U build
       - name: Build package
-        run: python setup.py sdist bdist_wheel
+        run: python -m build
       - name: Publish package to Test PyPI
         uses: pypa/gh-action-pypi-publish@master
         with:
@@ -36,15 +36,14 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel setuptools
+        run: pip install -U build
       - name: Build package
-        run: python setup.py sdist bdist_wheel
+        run: python -m build
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@master
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}
-          skip_existing: true
       - name: Update docs
         uses: ammaraskar/sphinx-action@master
         with:
