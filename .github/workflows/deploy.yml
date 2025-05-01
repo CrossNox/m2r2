@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel
+        run: pip install wheel setuptools
       - name: Build package
         run: python setup.py sdist bdist_wheel
       - name: Publish package to Test PyPI
@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.12
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel
+        run: pip install wheel setuptools
       - name: Build package
         run: python setup.py sdist bdist_wheel
       - name: Publish package to PyPI
