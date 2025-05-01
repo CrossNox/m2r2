@@ -14,7 +14,7 @@ with open(readme_file) as f:
     readme = f.read()
 
 
-__version__ = "0.3.3.post2"
+__version__ = "0.3.4"
 
 install_requires = ["mistune==0.8.4", "docutils>=0.19"]
 test_requirements = ["pygments"]
