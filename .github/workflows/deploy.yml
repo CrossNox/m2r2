@@ -16,9 +16,9 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel setuptools
+        run: pip install -U build
       - name: Build package
-        run: python setup.py sdist bdist_wheel
+        run: python -m build
       - name: Publish package to Test PyPI
         uses: pypa/gh-action-pypi-publish@master
         with:
@@ -36,9 +36,9 @@ jobs:
         with:
           python-version: 3.12
       - name: Install dependencies
-        run: pip install wheel setuptools
+        run: pip install -U build
       - name: Build package
-        run: python setup.py sdist bdist_wheel
+        run: python -m build
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@@release/v1
         with:
