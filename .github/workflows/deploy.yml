@@ -44,7 +44,6 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}
-          skip_existing: true
       - name: Update docs
         uses: ammaraskar/sphinx-action@master
         with:
