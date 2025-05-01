@@ -1,3 +1,6 @@
+### Version 0.3.4 (2025-05-01)
+* Fixed dependencies errors
+
 ### Version 0.3.3 (2022-08-11)
 * Drop support for all python versions prior to 3.7
 * Upgrade to docutils 0.19

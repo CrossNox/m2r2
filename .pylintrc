@@ -8,5 +8,4 @@ notes=XXX
 ignored-classes=SQLObject,Registrant,scoped_session
 
 [MESSAGES CONTROL]
-disable=bad-continuation,too-many-locals,len-as-condition
-
+disable=too-many-locals,len-as-condition,missing-function-docstring,missing-class-docstring,unspecified-encoding

@@ -1,30 +1,23 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Setup code"""
 
-import sys
 from os import path
 
 try:
     from setuptools import setup
 except ImportError:
-    from distutils.core import setup
+    from distutils.core import setup  # type: ignore # pylint: disable=deprecated-module
 
 readme_file = path.join(path.dirname(path.abspath(__file__)), "README.md")
-try:
-    from m2r2 import parse_from_file
-
-    readme = parse_from_file(readme_file)
-except ImportError:
-    with open(readme_file) as f:
-        readme = f.read()
+with open(readme_file) as f:
+    readme = f.read()
 
 
-__version__ = "0.3.3.post2"
+__version__ = "0.3.4"
 
 install_requires = ["mistune==0.8.4", "docutils>=0.19"]
 test_requirements = ["pygments"]
-if sys.version_info < (3, 3):
-    test_requirements.append("mock")
 
 setup(
     name="m2r2",
@@ -54,6 +47,9 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Text Processing",
     ],
     install_requires=install_requires,

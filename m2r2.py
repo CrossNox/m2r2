@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""M2R2 code"""
+
 
 from __future__ import print_function, unicode_literals
 
@@ -10,10 +12,14 @@ import sys
 from argparse import ArgumentParser, Namespace
 
 import mistune
-from docutils import io, nodes, statemachine, utils
+from docutils import io, statemachine, utils
 from docutils.parsers import rst
 from docutils.utils import column_width
-from pkg_resources import get_distribution
+
+try:
+    from pkg_resources import get_distribution
+except ImportError:
+    from importlib.metadata import distribution as get_distribution
 
 __version__ = get_distribution("m2r2").version
 
@@ -26,8 +32,8 @@ else:
     from urllib.parse import urlparse
 
 
-_is_sphinx = False
-prolog = """\
+_IS_SPHINX = False
+PROLOG = """\
 .. role:: raw-html-m2r(raw)
    :format: html
 
@@ -76,10 +82,11 @@ parser.add_argument(
 
 
 def parse_options():
+    """Parse CLI options"""
     parser.parse_known_args(namespace=options)
 
 
-class RestBlockGrammar(mistune.BlockGrammar):
+class RestBlockGrammar(mistune.BlockGrammar):  # pylint: disable=too-few-public-methods
     directive = re.compile(
         r"^( *\.\..*?)\n(?=\S)",
         re.DOTALL | re.MULTILINE,
@@ -109,7 +116,7 @@ class RestBlockLexer(mistune.BlockLexer):
         # reuse directive output
         self.tokens.append({"type": "directive", "text": m.group(1)})
 
-    def parse_rest_code_block(self, m):
+    def parse_rest_code_block(self, _m):
         self.tokens.append({"type": "rest_code_block"})
 
 
@@ -151,8 +158,8 @@ class RestInlineLexer(mistune.InlineLexer):
     def __init__(self, *args, **kwargs):
         no_underscore_emphasis = kwargs.pop("no_underscore_emphasis", False)
         disable_inline_math = kwargs.pop("disable_inline_math", False)
-        super(RestInlineLexer, self).__init__(*args, **kwargs)
-        if not _is_sphinx:
+        super().__init__(*args, **kwargs)
+        if not _IS_SPHINX:
             parse_options()
         if no_underscore_emphasis or getattr(options, "no_underscore_emphasis", False):
             self.rules.no_underscore_emphasis()
@@ -197,7 +204,7 @@ class RestInlineLexer(mistune.InlineLexer):
         return self.renderer.eol_literal_marker(marker)
 
 
-class RestRenderer(mistune.Renderer):
+class RestRenderer(mistune.Renderer):  # pylint: disable=too-many-public-methods
     _include_raw_html = False
     list_indent_re = re.compile(r"^(\s*(#\.|\*)\s)")
     indent = " " * 3
@@ -215,8 +222,8 @@ class RestRenderer(mistune.Renderer):
         self.parse_relative_links = kwargs.pop("parse_relative_links", False)
         self.anonymous_references = kwargs.pop("anonymous_references", False)
         self.use_mermaid = kwargs.pop("use_mermaid", False)
-        super(RestRenderer, self).__init__(*args, **kwargs)
-        if not _is_sphinx:
+        super().__init__(*args, **kwargs)
+        if not _IS_SPHINX:
             parse_options()
             if getattr(options, "parse_relative_links", False):
                 self.parse_relative_links = options.parse_relative_links
@@ -230,7 +237,7 @@ class RestRenderer(mistune.Renderer):
 
     def _raw_html(self, html):
         self._include_raw_html = True
-        return r"\ :raw-html-m2r:`{}`\ ".format(html)
+        return rf"\ :raw-html-m2r:`{html}`\ "
 
     def block_code(self, code, lang=None):
         if lang == "math":
@@ -238,8 +245,8 @@ class RestRenderer(mistune.Renderer):
         elif lang == "mermaid" and self.use_mermaid:
             first_line = "\n.. mermaid::\n\n"
         elif lang:
-            first_line = "\n.. code-block:: {}\n\n".format(lang)
-        elif _is_sphinx:
+            first_line = f"\n.. code-block:: {lang}\n\n"
+        elif _IS_SPHINX:
             first_line = "\n::\n\n"
         else:
             first_line = "\n.. code-block::\n\n"
@@ -247,7 +254,8 @@ class RestRenderer(mistune.Renderer):
 
     def block_quote(self, text):
         # text includes some empty line
-        return "\n..\n\n{}\n\n".format(self._indent_block(text.strip("\n")))
+        inner = self._indent_block(text.strip("\n"))
+        return f"\n..\n\n{inner}\n\n"
 
     def block_html(self, html):
         """Rendering block level pure html content.
@@ -263,7 +271,7 @@ class RestRenderer(mistune.Renderer):
         :param level: a number for the header level, for example: 1.
         :param raw: raw text content of the header.
         """
-        return "\n{0}\n{1}\n".format(text, self.hmarks[level] * column_width(text))
+        return f"\n{text}\n{self.hmarks[level] * column_width(text)}\n"
 
     def hrule(self):
         """Rendering method for ``<hr>`` tag."""
@@ -280,7 +288,8 @@ class RestRenderer(mistune.Renderer):
         for i, line in enumerate(lines):
             if line and not line.startswith(self.list_marker):
                 lines[i] = " " * len(mark) + line
-        return "\n{}\n".format("\n".join(lines)).replace(self.list_marker, mark)
+        inner = "\n".join(lines)
+        return f"\n{inner}\n".replace(self.list_marker, mark)
 
     def list_item(self, text):
         """Rendering list item snippet. Like ``<li>``."""
@@ -338,14 +347,14 @@ class RestRenderer(mistune.Renderer):
 
         :param text: text content for emphasis.
         """
-        return r"\ **{}**\ ".format(text)
+        return rf"\ **{text}**\ "
 
     def emphasis(self, text):
         """Rendering *emphasis* text.
 
         :param text: text content for emphasis.
         """
-        return r"\ *{}*\ ".format(text)
+        return rf"\ *{text}*\ "
 
     def codespan(self, text):
         """Rendering inline `code` text.
@@ -353,14 +362,13 @@ class RestRenderer(mistune.Renderer):
         :param text: text content for inline code.
         """
         if "``" not in text:
-            return r"\ ``{}``\ ".format(text)
-        else:
-            # actually, docutils split spaces in literal
-            return self._raw_html(
-                '<code class="docutils literal">'
-                '<span class="pre">{}</span>'
-                "</code>".format(text.replace("`", "&#96;"))
-            )
+            return rf"\ ``{text}``\ "
+        # actually, docutils split spaces in literal
+        return self._raw_html(
+            '<code class="docutils literal">'
+            f'<span class="pre">{text.replace("`", "&#96;")}</span>'
+            "</code>"
+        )
 
     def linebreak(self):
         """Rendering line break like ``<br>``."""
@@ -373,7 +381,7 @@ class RestRenderer(mistune.Renderer):
 
         :param text: text content for strikethrough.
         """
-        return self._raw_html("<del>{}</del>".format(text))
+        return self._raw_html(f"<del>{text}</del>")
 
     def text(self, text):
         """Rendering unformatted text.
@@ -402,41 +410,26 @@ class RestRenderer(mistune.Renderer):
         else:
             underscore = "_"
         if title:
-            return self._raw_html(
-                '<a href="{link}" title="{title}">{text}</a>'.format(
-                    link=link, title=title, text=text
-                )
-            )
+            return self._raw_html(f'<a href="{link}" title="{title}">{text}</a>')
         if not self.parse_relative_links:
-            return r"\ `{text} <{target}>`{underscore}\ ".format(
-                target=link, text=text, underscore=underscore
-            )
-        else:
-            url_info = urlparse(link)
-            if url_info.scheme:
-                return r"\ `{text} <{target}>`{underscore}\ ".format(
-                    target=link, text=text, underscore=underscore
-                )
+            return rf"\ `{text} <{link}>`{underscore}\ "
+        url_info = urlparse(link)
+        if url_info.scheme:
+            return rf"\ `{text} <{link}>`{underscore}\ "
+        link_type = "doc"
+        anchor = url_info.fragment
+        if url_info.fragment:
+            if url_info.path:
+                # Can't link to anchors via doc directive.
+                anchor = ""
             else:
-                link_type = "doc"
-                anchor = url_info.fragment
-                if url_info.fragment:
-                    if url_info.path:
-                        # Can't link to anchors via doc directive.
-                        anchor = ""
-                    else:
-                        # Example: [text](#anchor)
-                        link_type = "ref"
-                doc_link = "{doc_name}{anchor}".format(
-                    # splittext approach works whether or not path is set. It
-                    # will return an empty string if unset, which leads to
-                    # anchor only ref.
-                    doc_name=os.path.splitext(url_info.path)[0],
-                    anchor=anchor,
-                )
-                return r"\ :{link_type}:`{text} <{doc_link}>`\ ".format(
-                    link_type=link_type, doc_link=doc_link, text=text
-                )
+                # Example: [text](#anchor)
+                link_type = "ref"
+        doc_link = f"{os.path.splitext(url_info.path)[0]}{anchor}"
+        # splittext approach works whether or not path is set. It
+        # will return an empty string if unset, which leads to
+        # anchor only ref.
+        return rf"\ :{link_type}:`{text} <{doc_link}>`\ "
 
     def image(self, src, title, text):
         """Rendering a image with title and text.
@@ -450,9 +443,9 @@ class RestRenderer(mistune.Renderer):
         return "\n".join(
             [
                 "",
-                ".. image:: {}".format(src),
-                "   :target: {}".format(src),
-                "   :alt: {}".format(text),
+                f".. image:: {src}",
+                f"   :target: {src}",
+                f"   :alt: {text}",
                 "",
             ]
         )
@@ -474,7 +467,7 @@ class RestRenderer(mistune.Renderer):
         :param key: identity key for the footnote.
         :param index: the index count of current footnote.
         """
-        return r"\ [#fn-{}]_\ ".format(key)
+        return rf"\ [#fn-{key}]_\ "
 
     def footnote_item(self, key, text):
         """Rendering a footnote item.
@@ -482,7 +475,7 @@ class RestRenderer(mistune.Renderer):
         :param key: identity key for the footnote.
         :param text: text content of the footnote.
         """
-        return ".. [#fn-{0}] {1}\n".format(key, text.strip())
+        return f".. [#fn-{key}] {text.strip()}\n"
 
     def footnotes(self, text):
         """Wrapper for all footnotes.
@@ -491,18 +484,17 @@ class RestRenderer(mistune.Renderer):
         """
         if text:
             return "\n\n" + text
-        else:
-            return ""
+        return ""
 
-    """Below outputs are for rst."""
+    # Below outputs are for rst
 
     def image_link(self, url, target, alt):
         return "\n".join(
             [
                 "",
-                ".. image:: {}".format(url),
-                "   :target: {}".format(target),
-                "   :alt: {}".format(alt),
+                f".. image:: {url}",
+                f"   :target: {target}",
+                f"   :alt: {alt}",
                 "",
             ]
         )
@@ -515,7 +507,7 @@ class RestRenderer(mistune.Renderer):
 
     def inline_math(self, math):
         """Extension of recommonmark."""
-        return r":math:`{}`".format(math)
+        return rf":math:`{math}`"
 
     def eol_literal_marker(self, marker):
         """Extension of recommonmark."""
@@ -534,10 +526,10 @@ class M2R(mistune.Markdown):
     ):
         if renderer is None:
             renderer = RestRenderer(**kwargs)
-        super(M2R, self).__init__(renderer, inline=inline, block=block, **kwargs)
+        super().__init__(renderer, inline=inline, block=block, **kwargs)
 
     def parse(self, text):
-        output = super(M2R, self).parse(text)
+        output = super().parse(text)
         return self.post_process(output)
 
     def output_directive(self):
@@ -554,21 +546,20 @@ class M2R(mistune.Markdown):
             .replace("\\  ", " ")
             .replace("\\ .", ".")
         )
-        if self.renderer._include_raw_html:
-            return prolog + output
-        else:
-            return output
+        if self.renderer._include_raw_html:  # pylint: disable=protected-access
+            return PROLOG + output
+        return output
 
 
-class M2RParser(rst.Parser, object):
+class M2RParser(rst.Parser):
     # Explicitly tell supported formats to sphinx
     supported = ("markdown", "md", "mkd")
 
-    def parse(self, inputstrings, document):
-        if isinstance(inputstrings, statemachine.StringList):
-            inputstring = "\n".join(inputstrings)
+    def parse(self, inputstring, document):
+        if isinstance(inputstring, statemachine.StringList):
+            inputstring_ = "\n".join(inputstring)
         else:
-            inputstring = inputstrings
+            inputstring_ = inputstring
         config = document.settings.env.config
         converter = M2R(
             no_underscore_emphasis=config.no_underscore_emphasis,
@@ -577,7 +568,7 @@ class M2RParser(rst.Parser, object):
             disable_inline_math=config.m2r_disable_inline_math,
             use_mermaid=config.m2r_use_mermaid,
         )
-        super(M2RParser, self).parse(converter(inputstring), document)
+        super().parse(converter(inputstring_), document)
 
 
 class MdInclude(rst.Directive):
@@ -600,7 +591,7 @@ class MdInclude(rst.Directive):
         docutils version: 0.12
         """
         if not self.state.document.settings.file_insertion_enabled:
-            raise self.warning('"%s" directive disabled.' % self.name)
+            raise self.warning(f'"{self.name}" directive disabled.')
         source = self.state_machine.input_lines.source(
             self.lineno - self.state_machine.input_offset - 1
         )
@@ -608,7 +599,7 @@ class MdInclude(rst.Directive):
         path = rst.directives.path(self.arguments[0])
         path = os.path.normpath(os.path.join(source_dir, path))
         path = utils.relative_path(None, path)
-        path = nodes.reprunicode(path)
+        path = str(path)
 
         # get options (currently not use directive-specific options)
         encoding = self.options.get(
@@ -625,16 +616,15 @@ class MdInclude(rst.Directive):
             include_file = io.FileInput(
                 source_path=path, encoding=encoding, error_handler=e_handler
             )
-        except UnicodeEncodeError:
+        except UnicodeEncodeError as exc:
             raise self.severe(
-                'Problems with "%s" directive path:\n'
-                'Cannot encode input file path "%s" '
-                "(wrong locale?)." % (self.name, str(path))
-            )
+                f'Problems with "{self.name}" directive path:\n'
+                'Cannot encode input file path "{path}" '
+                "(wrong locale?)."
+            ) from exc
         except IOError as error:
             raise self.severe(
-                'Problems with "%s" directive path:\n%s.'
-                % (self.name, io.error_string(error))
+                f'Problems with "{self.name}" directive path:\n{io.error_string(error)}.'
             )
 
         # read from the file
@@ -648,7 +638,7 @@ class MdInclude(rst.Directive):
                 rawtext = include_file.read()
         except UnicodeError as error:
             raise self.severe(
-                'Problem with "%s" directive:\n%s' % (self.name, io.error_string(error))
+                f'Problem with "{self.name}" directive:\n{io.error_string(error)}'
             )
 
         config = self.state.document.settings.env.config
@@ -668,8 +658,8 @@ class MdInclude(rst.Directive):
 
 def setup(app):
     """When used for sphinx extension."""
-    global _is_sphinx
-    _is_sphinx = True
+    global _IS_SPHINX  # pylint: disable=global-statement
+    _IS_SPHINX = True
     app.add_config_value("no_underscore_emphasis", False, "env")
     app.add_config_value("m2r_parse_relative_links", False, "env")
     app.add_config_value("m2r_anonymous_references", False, "env")
@@ -683,11 +673,11 @@ def setup(app):
         app.add_source_suffix(".md", "markdown")
         app.add_source_parser(M2RParser)
     app.add_directive("mdinclude", MdInclude)
-    metadata = dict(
-        version=__version__,
-        parallel_read_safe=True,
-        parallel_write_safe=True,
-    )
+    metadata = {
+        "version": __version__,
+        "parallel_read_safe": True,
+        "parallel_write_safe": True,
+    }
     return metadata
 
 
@@ -697,19 +687,19 @@ def convert(text, **kwargs):
 
 def parse_from_file(file, encoding="utf-8", **kwargs):
     if not os.path.exists(file):
-        raise OSError("No such file exists: {}".format(file))
+        raise OSError(f"No such file exists: {file}")
     with _open(file, encoding=encoding) as f:
         src = f.read()
     output = convert(src, **kwargs)
     return output
 
 
-def save_to_file(file, src, encoding="utf-8", **kwargs):
+def save_to_file(file, src, encoding="utf-8", **_kwargs):
     target = os.path.splitext(file)[0] + ".rst"
-    if not options.overwrite and os.path.exists(target):
-        confirm = input("{} already exists. overwrite it? [y/n]: ".format(target))
+    if not options.overwrite and os.path.exists(target):  # pylint: disable=no-member
+        confirm = input(f"{target} already exists. overwrite it? [y/n]: ")
         if confirm.upper() not in ("Y", "YES"):
-            print("skip {}".format(file))
+            print(f"skip {file}")
             return
     with _open(target, "w", encoding=encoding) as f:
         f.write(src)
@@ -717,12 +707,12 @@ def save_to_file(file, src, encoding="utf-8", **kwargs):
 
 def main():
     parse_options()  # parse cli options
-    if not options.input_file:
+    if not options.input_file:  # pylint: disable=no-member
         parser.print_help()
         parser.exit(0)
-    for file in options.input_file:
+    for file in options.input_file:  # pylint: disable=no-member
         output = parse_from_file(file)
-        if options.dry_run:
+        if options.dry_run:  # pylint: disable=no-member
             print(output)
         else:
             save_to_file(file, output)
