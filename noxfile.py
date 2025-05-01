@@ -53,6 +53,7 @@ def test_sphinx_old_build(session):
     with tempfile.TemporaryDirectory() as tmpdirname:
         session.install(".")
         session.install("sphinx==1.7.0")
+        session.install("alabaster==0.7.13")
         session.install("jinja2==3.0.0")
         session.run("sphinx-build", "-W", "-E", "-n", "-b", "html", "docs", tmpdirname)
 

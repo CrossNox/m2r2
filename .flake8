@@ -1,12 +1,11 @@
 [flake8]
 
 ignore =
-	E501, # pylint already does this
-	W503, # https://github.com/psf/black/issues/113
+	E501,
+	W503,
 	D100,
 	D101,
 	D102,
 	D103,
 	D107,
 	D401
-

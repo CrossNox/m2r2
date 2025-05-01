@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""Setup code"""
 
-import sys
 from os import path
 
 try:
     from setuptools import setup
 except ImportError:
-    from distutils.core import setup
+    from distutils.core import setup  # type: ignore # pylint: disable=deprecated-module
 
 readme_file = path.join(path.dirname(path.abspath(__file__)), "README.md")
 with open(readme_file) as f:
