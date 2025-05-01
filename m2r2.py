@@ -362,7 +362,7 @@ class RestRenderer(mistune.Renderer):  # pylint: disable=too-many-public-methods
         :param text: text content for inline code.
         """
         if "``" not in text:
-            return r"\ ``{text}``\ "
+            return rf"\ ``{text}``\ "
         # actually, docutils split spaces in literal
         return self._raw_html(
             '<code class="docutils literal">'
