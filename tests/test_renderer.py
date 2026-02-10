@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-from __future__ import print_function, unicode_literals
 
 from unittest import TestCase, skip
 
 from docutils import io
 from docutils.core import Publisher
+
 from m2r2 import convert
 from m2r2.constants import PROLOG
 
@@ -43,8 +42,9 @@ class RendererTestBase(TestCase):
         pub.set_source(rst, source_path=None)
         pub.set_destination(destination=None, destination_path=None)
         output = pub.publish(enable_exit_status=False)
-        # TODO: restore
-        # self.assertLess(pub.document.reporter.max_level, 0)
+        # Check that there are no RST warnings/errors (max_level should be < 2)
+        # Level 0 = info, 1 = warning, 2 = error, 3 = severe, 4 = fatal
+        self.assertLess(pub.document.reporter.max_level, 2)
         return output, pub
 
 
@@ -449,11 +449,7 @@ class TestList(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(
             out,
-            "\n\n* list 1\n"
-            "* list 2\n\n"
-            "  * list 2.1\n"
-            "  * list 2.2\n\n"
-            "* list 3\n",
+            "\n\n* list 1\n* list 2\n\n  * list 2.1\n  * list 2.2\n\n* list 3\n",
         )
 
     def test_nested_ul_2(self):
