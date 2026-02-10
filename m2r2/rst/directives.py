@@ -1,7 +1,8 @@
 import os
 
-from docutils import io, nodes, statemachine, utils
+from docutils import io, statemachine, utils
 from docutils.parsers import rst
+
 from m2r2 import M2R2
 
 
@@ -55,7 +56,7 @@ class MdInclude(rst.Directive):
                 f'Cannot encode input file path "{path}" '
                 "(wrong locale?)."
             )
-        except IOError as error:
+        except OSError as error:
             raise self.severe(
                 f'Problems with "{self.name}" directive path:\n{io.error_string(error)}.'
             )

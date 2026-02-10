@@ -1,7 +1,8 @@
 import re
-from typing import Match
+from re import Match
 
 import mistune
+
 from m2r2.typing import Element, State, Token
 
 # TODO: fix global
