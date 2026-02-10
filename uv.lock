@@ -678,7 +678,7 @@ requires-dist = [
     { name = "mistune", specifier = ">=3.0" },
     { name = "sphinx", marker = "extra == 'sphinx'", specifier = ">=7.0" },
 ]
-provides-extras = ["sphinx", "cli"]
+provides-extras = ["sphinx"]
 
 [package.metadata.requires-dev]
 dev = [
