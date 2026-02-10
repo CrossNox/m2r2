@@ -1,36 +1,61 @@
-[tool.poetry]
+[project]
 name = "m2r2"
 version = "1.0.0"
 description = "Markdown and reStructuredText in a single file."
-authors = ["CrossNox <ijmermet+m2r2@gmail.com>"]
-license = "MIT"
 readme = "README.md"
+license = "MIT"
+authors = [{ name = "CrossNox", email = "ijmermet+m2r2@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = ["mistune>=3.0", "docutils>=0.21.2"]
 
-[tool.poetry.scripts]
-m2r2 = "m2r2:main"
+[project.optional-dependencies]
+sphinx = ["sphinx>=7.0"]
+cli = []  # CLI has no extra deps, just marks the intent
 
-[tool.poetry.dependencies]
-python = ">=3.9,<4"
-mistune = ">=3.0"
-docutils = ">=0.21.2"
+[project.scripts]
+m2r2 = "m2r2.cli:main"
 
-[tool.poetry.group.dev.dependencies]
-pygments = "^2.18.0"
-black = "^24.4.2"
-isort = "^5.13.2"
-pylint = "^3.2.6"
-mypy = "^1.11.0"
-ruff = "^0.5.5"
-bandit = "^1.7.9"
-pycln = "^2.4.0"
-types-docutils = "^0.21.0.20240724"
-types-setuptools = "^71.1.0.20240726"
+[project.urls]
+Homepage = "https://github.com/crossnox/m2r2"
+Repository = "https://github.com/crossnox/m2r2"
 
-[tool.poetry.group.testing.dependencies]
-pytest = "^8.3.2"
-pytest-cov = "^5.0.0"
-six = "^1.16.0"
-sphinx = "^7.4.7"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+  "pygments>=2.18.0",
+  "mypy>=1.11.0",
+  "ruff>=0.5.5",
+  "bandit>=1.7.9",
+  "types-docutils>=0.21.0",
+]
+test = ["pytest>=8.3.2", "pytest-cov>=5.0.0", "sphinx>=7.4.7"]
+
+[tool.uv]
+default-groups = ["dev", "test"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "RUF", # ruff-specific
+]
+ignore = [
+  "E501", # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["m2r2"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]
@@ -38,30 +63,18 @@ exclude_dirs = ["tests"]
 [tool.mypy]
 ignore_missing_imports = true
 follow_imports = "skip"
+python_version = "3.9"
 
-[tool.pylint.main]
-jobs = 0
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
 
-[tool.pylint.basic]
-good-names = ["e"]
-class-const-rgx = "(?:(?P<snake>[a-z_]+)|(?P<upper>[A-Z]+))$"
+[tool.coverage.run]
+source = ["m2r2"]
+branch = true
 
-[tool.pylint.design]
-max-locals = 16
-
-[tool.pylint."messages control"]
-disable = [
-  "fixme",
-  "unspecified-encoding",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-module-docstring",
-  "unused-argument",
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
 ]
-
-[tool.pylint.format]
-max-line-length = 88
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
