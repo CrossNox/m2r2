@@ -4,7 +4,25 @@ from pathlib import Path
 from m2r2 import convert
 
 
+class Options:
+    """Global options object for backward compatibility with tests."""
+
+    def __init__(self):
+        self.overwrite = False
+        self.dry_run = False
+        self.no_underscore_emphasis = False
+        self.parse_relative_links = False
+        self.anonymous_references = False
+        self.disable_inline_math = False
+        self.input_files = []
+
+
+# Global options object for backward compatibility
+options = Options()
+
+
 def parse_arguments() -> argparse.Namespace | None:
+    global options
     parser = argparse.ArgumentParser(description="Convert files to reST format")
     # TODO: add breaking change to changelog
     parser.add_argument(
@@ -48,6 +66,15 @@ def parse_arguments() -> argparse.Namespace | None:
     )
 
     args = parser.parse_args()
+
+    # Update global options for backward compatibility
+    options.overwrite = args.overwrite
+    options.dry_run = args.dry_run
+    options.no_underscore_emphasis = args.no_underscore_emphasis
+    options.parse_relative_links = args.parse_relative_links
+    options.anonymous_references = args.anonymous_references
+    options.disable_inline_math = args.disable_inline_math
+    options.input_files = args.input_files
 
     if not args.input_files:
         parser.print_help()
@@ -103,6 +130,10 @@ def main():
     for file in args.input_files:
         output = parse_from_file(
             file,
+            no_underscore_emphasis=args.no_underscore_emphasis,
+            parse_relative_links=args.parse_relative_links,
+            anonymous_references=args.anonymous_references,
+            disable_inline_math=args.disable_inline_math,
         )
         if args.dry_run:
             print(output)
