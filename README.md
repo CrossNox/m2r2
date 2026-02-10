@@ -136,7 +136,7 @@ See [example document](https://crossnox.github.io/m2r2/example.html) and [its so
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See [CONTRIBUTING.md](https://github.com/CrossNox/m2r2/blob/master/CONTRIBUTING.md) for development setup and guidelines.
 
 ## Acknowledgement
 
