@@ -1,3 +1,8 @@
+### Version 1.0.0 (2026-02-11)
+* Drop support for Python < 3.9
+* Upgrade to mistune 3.0+
+* Upgrade to docutils 0.21.2+
+
 ### Version 0.3.3 (2022-08-11)
 * Drop support for all python versions prior to 3.7
 * Upgrade to docutils 0.19
