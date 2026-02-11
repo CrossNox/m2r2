@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
+"""Tests for the m2r2 CLI."""
 
 import subprocess
 import sys
-from copy import copy
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from m2r2.cli.m2r2 import main, options, parse_from_file
+from m2r2.cli import main, parse_from_file
 
 curdir = Path(__file__).parent
 test_md = curdir / "test.md"
@@ -16,19 +16,13 @@ test_rst = curdir / "test.rst"
 
 class TestConvert(TestCase):
     def setUp(self):
-        # reset cli options
-        options.overwrite = False
-        options.dry_run = False
-        options.no_underscore_emphasis = False
-        options.anonymous_references = False
-        options.disable_inline_math = False
-        self._orig_argv = copy(sys.argv)
-        if test_rst.exists():
-            self._orig_rst = test_rst.read_text()
+        self._orig_rst = test_rst.read_text() if test_rst.exists() else None
 
     def tearDown(self):
-        sys.argv = self._orig_argv
-        test_rst.write_text(self._orig_rst)
+        if self._orig_rst is not None:
+            test_rst.write_text(self._orig_rst)
+        elif test_rst.exists():
+            test_rst.unlink()
 
     def test_no_file(self):
         p = subprocess.Popen(
@@ -37,8 +31,8 @@ class TestConvert(TestCase):
         )
         p.wait()
         self.assertEqual(p.returncode, 0)
-        with p.stdout as buffer:
-            message = buffer.read().decode()
+        assert p.stdout is not None
+        message = p.stdout.read().decode()
         self.assertIn("usage", message)
         self.assertIn("underscore-emphasis", message)
         self.assertIn("anonymous-references", message)
@@ -51,41 +45,37 @@ class TestConvert(TestCase):
         self.assertEqual(output.strip(), expected.strip())
 
     def test_dryrun(self):
-        sys.argv = [sys.argv[0], "--dry-run", str(test_md)]
         rst = test_rst.read_text()
         test_rst.unlink()
         self.assertFalse(test_rst.exists())
         with patch("builtins.print") as m:
-            main()
+            main(["--dry-run", str(test_md)])
         self.assertFalse(test_rst.exists())
         m.assert_called_once_with(rst)
 
     def test_write_file(self):
-        sys.argv = [sys.argv[0], str(test_md)]
         test_rst.unlink()
         self.assertFalse(test_rst.exists())
-        main()
+        main([str(test_md)])
         self.assertTrue(test_rst.exists())
 
     def test_overwrite_file(self):
-        sys.argv = [sys.argv[0], str(test_md)]
         test_rst.write_text("test")
         first_line = test_rst.read_text().splitlines()[0]
         self.assertIn("test", first_line)
         with patch("builtins.input", return_value="y"):
-            main()
+            main([str(test_md)])
         self.assertTrue(test_rst.exists())
         first_line = test_rst.read_text().splitlines()[0]
         self.assertNotIn("test", first_line)
 
     def test_overwrite_option(self):
-        sys.argv = [sys.argv[0], "--overwrite", str(test_md)]
         test_rst.write_text("test")
         first_line = test_rst.read_text().splitlines()[0]
         self.assertIn("test", first_line)
         with patch("builtins.input", return_value="y") as m_input:
             with patch("builtins.print") as m_print:
-                main()
+                main(["--overwrite", str(test_md)])
         self.assertTrue(test_rst.exists())
         self.assertFalse(m_input.called)
         self.assertFalse(m_print.called)
@@ -93,21 +83,18 @@ class TestConvert(TestCase):
         self.assertNotIn("test", first_line)
 
     def test_underscore_option(self):
-        sys.argv = [sys.argv[0], "--no-underscore-emphasis", "--dry-run", str(test_md)]
         with patch("builtins.print") as m:
-            main()
+            main(["--no-underscore-emphasis", "--dry-run", str(test_md)])
         self.assertIn("__content__", m.call_args[0][0])
         self.assertNotIn("**content**", m.call_args[0][0])
 
     def test_anonymous_reference_option(self):
-        sys.argv = [sys.argv[0], "--anonymous-references", "--dry-run", str(test_md)]
         with patch("builtins.print") as m:
-            main()
+            main(["--anonymous-references", "--dry-run", str(test_md)])
         self.assertIn("`A link to GitHub <http://github.com/>`__", m.call_args[0][0])
 
     def test_disable_inline_math(self):
-        sys.argv = [sys.argv[0], "--disable-inline-math", "--dry-run", str(test_md)]
         with patch("builtins.print") as m:
-            main()
+            main(["--disable-inline-math", "--dry-run", str(test_md)])
         self.assertIn("``$E = mc^2$``", m.call_args[0][0])
         self.assertNotIn(":math:", m.call_args[0][0])

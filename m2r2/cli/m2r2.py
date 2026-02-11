@@ -1,113 +1,57 @@
+"""M2R2 command-line interface."""
+
+from __future__ import annotations
+
 import argparse
+import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from m2r2 import convert
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-class Options:
-    """Global options object for backward compatibility with tests."""
-
-    def __init__(self):
-        self.overwrite = False
-        self.dry_run = False
-        self.no_underscore_emphasis = False
-        self.parse_relative_links = False
-        self.anonymous_references = False
-        self.disable_inline_math = False
-        self.input_files = []
-
-
-# Global options object for backward compatibility
-options = Options()
-
-
-def parse_arguments() -> argparse.Namespace | None:
-    global options
-    parser = argparse.ArgumentParser(description="Convert files to reST format")
-    # TODO: add breaking change to changelog
-    parser.add_argument(
-        "input_files", nargs="*", type=Path, help="Files to convert to reST format"
-    )
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        default=False,
-        help="Overwrite output file without confirmation",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Print conversion result without saving output file",
-    )
-    parser.add_argument(
-        "--no-underscore-emphasis",
-        action="store_true",
-        default=False,
-        help="Do not use underscore (_) for emphasis",
-    )
-    parser.add_argument(
-        "--parse-relative-links",
-        action="store_true",
-        default=False,
-        help="Parse relative links into ref or doc directives",
-    )
-    parser.add_argument(
-        "--anonymous-references",
-        action="store_true",
-        default=False,
-        help="Use anonymous references in generated rst",
-    )
-    parser.add_argument(
-        "--disable-inline-math",
-        action="store_true",
-        default=False,
-        help="Disable parsing inline math",
-    )
-
-    args = parser.parse_args()
-
-    # Update global options for backward compatibility
-    options.overwrite = args.overwrite
-    options.dry_run = args.dry_run
-    options.no_underscore_emphasis = args.no_underscore_emphasis
-    options.parse_relative_links = args.parse_relative_links
-    options.anonymous_references = args.anonymous_references
-    options.disable_inline_math = args.disable_inline_math
-    options.input_files = args.input_files
-
-    if not args.input_files:
-        parser.print_help()
-        return None
-
-    return args
+__all__ = ["main", "parse_from_file", "save_to_file"]
 
 
 def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
-    file_path = Path(file)
-    if not file_path.exists():
-        raise FileNotFoundError(f"No such file exists: {file_path}")
+    """Read a Markdown file and convert it to reStructuredText.
 
-    with open(file_path, encoding=encoding) as f:
-        src = f.read()
+    Args:
+        file: Path to the Markdown file.
+        encoding: File encoding. Defaults to "utf-8".
+        **kwargs: Options passed to convert().
 
-    return convert(src, **kwargs)
+    Returns:
+        The converted reStructuredText content.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+    """
+    path = Path(file)
+    if not path.exists():
+        raise FileNotFoundError(f"No such file exists: {path}")
+
+    return convert(path.read_text(encoding=encoding), **kwargs)
 
 
 def save_to_file(
-    file: str | Path, content: str, encoding: str = "utf-8", overwrite: bool = False
-) -> None:
-    """
-    Save content to a file, optionally overwriting existing files.
+    file: str | Path,
+    content: str,
+    encoding: str = "utf-8",
+    overwrite: bool = False,
+) -> bool:
+    """Save converted content to a .rst file.
 
     Args:
-        file (str): The input file path.
-        content (str): The content to be written to the file.
-        encoding (str, optional): The encoding to use for the file. Defaults to "utf-8".
-        overwrite (bool, optional): Whether to overwrite existing files without prompting. Defaults to False.
+        file: The input file path (extension will be changed to .rst).
+        content: The content to write.
+        encoding: File encoding. Defaults to "utf-8".
+        overwrite: Skip confirmation prompt. Defaults to False.
 
     Returns:
-        None
+        True if file was written, False if skipped.
     """
     target = Path(file).with_suffix(".rst")
 
@@ -115,31 +59,101 @@ def save_to_file(
         confirm = input(f"{target} already exists. Overwrite it? [y/N]: ").lower()
         if confirm not in ("y", "yes"):
             print(f"Skipping {file}")
-            return
+            return False
 
-    with open(target, "w", encoding=encoding) as f:
-        f.write(content)
+    target.write_text(content, encoding=encoding)
+    return True
 
 
-def main():
-    args = parse_arguments()
+def create_parser() -> argparse.ArgumentParser:
+    """Create the argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="m2r2",
+        description="Convert Markdown to reStructuredText.",
+    )
+    parser.add_argument(
+        "input_files",
+        nargs="*",
+        type=Path,
+        metavar="FILE",
+        help="Markdown files to convert",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="overwrite output files without confirmation",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print output to stdout instead of writing files",
+    )
+    parser.add_argument(
+        "--no-underscore-emphasis",
+        action="store_true",
+        help="disable underscore emphasis (keep _text_ as-is)",
+    )
+    parser.add_argument(
+        "--parse-relative-links",
+        action="store_true",
+        help="convert relative links to :doc: or :ref: directives",
+    )
+    parser.add_argument(
+        "--anonymous-references",
+        action="store_true",
+        help="use anonymous references (__ instead of _)",
+    )
+    parser.add_argument(
+        "--disable-inline-math",
+        action="store_true",
+        help="disable inline math conversion",
+    )
+    return parser
 
-    if args is None:
-        return
+
+def run(args: argparse.Namespace) -> int:
+    """Execute the conversion based on parsed arguments.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Exit code (0 for success).
+    """
+    if not args.input_files:
+        create_parser().print_help()
+        return 0
+
+    convert_opts = {
+        "no_underscore_emphasis": args.no_underscore_emphasis,
+        "parse_relative_links": args.parse_relative_links,
+        "anonymous_references": args.anonymous_references,
+        "disable_inline_math": args.disable_inline_math,
+    }
 
     for file in args.input_files:
-        output = parse_from_file(
-            file,
-            no_underscore_emphasis=args.no_underscore_emphasis,
-            parse_relative_links=args.parse_relative_links,
-            anonymous_references=args.anonymous_references,
-            disable_inline_math=args.disable_inline_math,
-        )
+        output = parse_from_file(file, **convert_opts)
         if args.dry_run:
             print(output)
         else:
             save_to_file(file, output, overwrite=args.overwrite)
 
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Main entry point for the CLI.
+
+    Args:
+        argv: Command-line arguments. Defaults to sys.argv[1:].
+
+    Returns:
+        Exit code.
+    """
+    parser = create_parser()
+    args = parser.parse_args(argv)
+    return run(args)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
