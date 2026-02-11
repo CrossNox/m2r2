@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from m2r2.cli import main, parse_from_file
+from m2r2.cli.m2r2 import main, parse_from_file
 
 curdir = Path(__file__).parent
 test_md = curdir / "test.md"
