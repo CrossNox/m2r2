@@ -12,8 +12,6 @@ from m2r2 import convert
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-__all__ = ["main", "parse_from_file", "save_to_file"]
-
 
 def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
     """Read a Markdown file and convert it to reStructuredText.
