@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
+def convert_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
     """Read a Markdown file and convert it to reStructuredText.
 
     Args:
@@ -130,7 +130,7 @@ def run(args: argparse.Namespace) -> int:
     }
 
     for file in args.input_files:
-        output = parse_from_file(file, **convert_opts)
+        output = convert_file(file, **convert_opts)
         if args.dry_run:
             print(output)
         else:
