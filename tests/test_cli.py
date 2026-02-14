@@ -28,16 +28,14 @@ class TestConvert(TestCase):
         p = subprocess.Popen(
             [sys.executable, "-m", "m2r2"],
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         p.wait()
-        self.assertEqual(p.returncode, 0)
-        assert p.stdout is not None
-        message = p.stdout.read().decode()
+        self.assertEqual(p.returncode, 2)
+        assert p.stderr is not None
+        message = p.stderr.read().decode()
         self.assertIn("usage", message)
-        self.assertIn("underscore-emphasis", message)
-        self.assertIn("anonymous-references", message)
-        self.assertIn("inline-math", message)
-        self.assertRegex(message, r"option(s|al arguments):")
+        self.assertIn("required: FILE", message)
 
     def test_convert_file(self):
         output = convert_file(test_md)

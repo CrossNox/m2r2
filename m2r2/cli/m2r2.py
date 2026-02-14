@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -71,7 +70,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "input_files",
-        nargs="*",
+        nargs="+",
         type=Path,
         metavar="FILE",
         help="Markdown files to convert",
@@ -109,49 +108,36 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run(args: argparse.Namespace) -> int:
+def run_m2r2(args: argparse.Namespace) -> None:
     """Execute the conversion based on parsed arguments.
 
     Args:
         args: Parsed command-line arguments.
-
-    Returns:
-        Exit code (0 for success).
     """
-    if not args.input_files:
-        create_parser().print_help()
-        return 0
-
-    convert_opts = {
-        "no_underscore_emphasis": args.no_underscore_emphasis,
-        "parse_relative_links": args.parse_relative_links,
-        "anonymous_references": args.anonymous_references,
-        "disable_inline_math": args.disable_inline_math,
-    }
-
     for file in args.input_files:
-        output = convert_file(file, **convert_opts)
+        output = convert_file(
+            file,
+            no_underscore_emphasis=args.no_underscore_emphasis,
+            parse_relative_links=args.parse_relative_links,
+            anonymous_references=args.anonymous_references,
+            disable_inline_math=args.disable_inline_math,
+        )
         if args.dry_run:
             print(output)
         else:
             save_to_file(file, output, overwrite=args.overwrite)
 
-    return 0
 
-
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> None:
     """Main entry point for the CLI.
 
     Args:
         argv: Command-line arguments. Defaults to sys.argv[1:].
-
-    Returns:
-        Exit code.
     """
     parser = create_parser()
     args = parser.parse_args(argv)
-    return run(args)
+    run_m2r2(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
