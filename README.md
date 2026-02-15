@@ -44,19 +44,19 @@ I wanted to write sphinx document in markdown, since it's widely used now and ea
 Python 3.9+ is required.
 
 ```bash
-pip install m2r2
+uv add m2r2
 ```
 
-Or with [uv](https://docs.astral.sh/uv/):
+Or use [uvx](https://docs.astral.sh/uv/guides/tools/) to run without installing:
 
 ```bash
-uv add m2r2
+uvx m2r2 your_document.md
 ```
 
 For Sphinx integration:
 
 ```bash
-pip install m2r2[sphinx]
+uv add m2r2[sphinx]
 ```
 
 ## Usage
@@ -87,12 +87,12 @@ print(rst)
 # Sentence.
 ```
 
-Or, use `parse_from_file` function to load markdown file and obtain converted text.
+Or, use `convert_file` function to load a markdown file and obtain converted text.
 
 ```python
-from m2r2.cli import parse_from_file
+from m2r2.cli import convert_file
 
-output = parse_from_file('markdown_file.md')
+output = convert_file('markdown_file.md')
 ```
 
 ### Sphinx Integration
