@@ -42,7 +42,6 @@ class M2R2:
     def __init__(self, renderer=None, block=None, inline=None, plugins=None, **kwargs):
         disable_inline_math = kwargs.pop("disable_inline_math", False)
         no_underscore_emphasis = kwargs.pop("no_underscore_emphasis", False)
-        kwargs.pop("use_mermaid", False)  # Consumed by RestRenderer
 
         renderer = renderer or RestRenderer(**kwargs)
 
@@ -105,7 +104,7 @@ class M2R2:
         self.md = mistune.create_markdown(renderer=renderer, plugins=plugins)
         self.renderer = renderer
 
-    def parse(self, s, state=None):
+    def parse(self, s):
         output = self.md(s)
         return self.post_process(output)
 

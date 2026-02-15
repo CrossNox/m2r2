@@ -220,11 +220,7 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
             if line_indent >= current_item["indent"] + 2 and stripped.strip():
                 # This is a continuation line
                 # Strip the leading indent to match the item's base indent level
-                content_text = (
-                    stripped[current_item["indent"] + 2 :]
-                    if line_indent >= current_item["indent"] + 2
-                    else stripped.lstrip()
-                )
+                content_text = stripped[current_item["indent"] + 2 :]
                 current_item["content_lines"].append(content_text)
                 state.cursor = line_end
             else:

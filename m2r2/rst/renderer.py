@@ -141,12 +141,6 @@ class RestRenderer(RSTRenderer):
         represent blank lines in the source markdown.
         """
         text = token.get("raw", "")
-        if not text:
-            # Fallback for old token format
-            if token.get("children"):
-                text = token["children"][0].get("raw", "")
-            else:
-                text = token.get("text", "")
 
         # Count trailing newlines
         content = text.rstrip("\n")
