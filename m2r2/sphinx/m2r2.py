@@ -1,13 +1,10 @@
 from m2r2 import __version__
 from m2r2.parser import M2R2Parser
-from m2r2.rst import renderer as rst_renderer
-from m2r2.rst.directives import MdInclude
+from m2r2.sphinx.directives import MdInclude
 
 
 def setup(app):
     """When used for sphinx extension."""
-    # Set the global flag in the renderer module so it uses :: instead of code-block
-    rst_renderer._is_sphinx = True
     app.add_config_value("no_underscore_emphasis", False, "env")
     app.add_config_value("m2r_parse_relative_links", False, "env")
     app.add_config_value("m2r_anonymous_references", False, "env")

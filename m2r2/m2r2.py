@@ -4,6 +4,8 @@
 import re
 
 import mistune
+from mistune.plugins.footnotes import footnotes
+from mistune.plugins.table import table
 
 from m2r2.constants import PROLOG
 from m2r2.rst.plugins import rst_directives
@@ -18,16 +20,29 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
 
 
 class M2R2:
+    @classmethod
+    def from_sphinx_config(cls, config):
+        """Create an M2R2 instance from Sphinx configuration.
+
+        Args:
+            config: Sphinx config object with m2r2 settings.
+
+        Returns:
+            M2R2 instance configured according to Sphinx settings.
+        """
+        return cls(
+            no_underscore_emphasis=config.no_underscore_emphasis,
+            parse_relative_links=config.m2r_parse_relative_links,
+            anonymous_references=config.m2r_anonymous_references,
+            disable_inline_math=config.m2r_disable_inline_math,
+            use_mermaid=config.m2r_use_mermaid,
+            is_sphinx=True,
+        )
+
     def __init__(self, renderer=None, block=None, inline=None, plugins=None, **kwargs):
         disable_inline_math = kwargs.pop("disable_inline_math", False)
         no_underscore_emphasis = kwargs.pop("no_underscore_emphasis", False)
-        use_mermaid = kwargs.pop("use_mermaid", False)
-
-        # Store the parameters for the renderer
-        self.renderer_kwargs = kwargs
-        self.disable_inline_math = disable_inline_math
-        self.no_underscore_emphasis = no_underscore_emphasis
-        self.use_mermaid = use_mermaid
+        kwargs.pop("use_mermaid", False)  # Consumed by RestRenderer
 
         renderer = renderer or RestRenderer(**kwargs)
 
@@ -83,9 +98,6 @@ class M2R2:
         plugins.append(custom_rst_directives)
 
         # Add table and footnote support
-        from mistune.plugins.footnotes import footnotes
-        from mistune.plugins.table import table
-
         plugins.append(table)
         plugins.append(footnotes)
 

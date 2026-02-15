@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import re
 from re import Match
-from typing import Any, Dict, List
+from typing import Any
 
 from mistune.core import BlockState, InlineState
 
@@ -127,144 +129,6 @@ def parse_eol_literal_marker(inline, m: Match, state: InlineState):
     return m.end()
 
 
-def parse_visual_list(block, m: Match, state: BlockState):
-    """Parse lists with visual nesting detection for m2r2 compatibility."""
-    # Get the matched groups
-    leading_spaces = m.group("visual_list_spaces")
-    marker = m.group("visual_list_marker")
-    text = m.group("visual_list_content")
-
-    # If empty list item, let default handling take over
-    if not text.strip():
-        end_pos = state.append_paragraph()
-        if end_pos:
-            return end_pos
-
-    # Determine if this is an ordered list
-    ordered = len(marker) > 1
-    indent_level = len(leading_spaces)
-
-    # Calculate visual depth based on indentation
-    # Use standard indentation levels: 0, 2, 4, 6, 8... for unordered
-    # and 0, 3, 6, 9... for ordered (since ordered markers are longer)
-    if ordered:
-        visual_depth = indent_level // 3
-    else:
-        visual_depth = indent_level // 2
-
-    # Create the list token
-    token: Dict[str, Any] = {
-        "type": "list",
-        "children": [],
-        "tight": True,
-        "bullet": marker[-1],
-        "attrs": {
-            "depth": visual_depth,
-            "ordered": ordered,
-        },
-    }
-
-    # Handle starting number for ordered lists
-    if ordered:
-        start = int(marker[:-1])
-        if start != 1:
-            token["attrs"]["start"] = start
-
-    # Start by adding the first item
-    first_item_content = text.lstrip() if text.strip() else ""
-    _add_simple_list_item(block, token, first_item_content)
-
-    # Set cursor position
-    state.cursor = m.end() + 1
-
-    # Parse remaining items at the same indentation level
-    _parse_remaining_list_items(block, token, state, indent_level, ordered)
-
-    state.append_token(token)
-    return state.cursor
-
-
-def _parse_remaining_list_items(
-    block,
-    list_token: Dict[str, Any],
-    state: BlockState,
-    base_indent: int,
-    ordered: bool,
-):
-    """Parse remaining list items at the same indentation level."""
-
-    # Get the marker pattern for continuing items
-    if ordered:
-        marker_pattern = r"(\d{1,9}[.)])"
-    else:
-        marker_pattern = r"([\*\+-])"
-
-    # Create pattern to match list items at current indentation level
-    item_pattern = re.compile(
-        r"^(?P<spaces> *)(?P<marker>"
-        + marker_pattern
-        + r")(?P<content>[ \t]*|[ \t].+)$",
-        re.M,
-    )
-
-    while state.cursor < state.cursor_max:
-        # Find the end of current line
-        line_end = state.find_line_end()
-        line = state.get_text(line_end)
-
-        # Check if this is a blank line
-        if block.BLANK_LINE.match(line):
-            state.cursor = line_end
-            continue
-
-        # Check if this line starts a new list item
-        match = item_pattern.match(line)
-        if match:
-            spaces = match.group("spaces")
-            marker = match.group("marker")
-            content = match.group("content")
-            line_indent = len(spaces)
-
-            # Check if this item belongs to our list level
-            if line_indent == base_indent:
-                # Same level - add this item
-                item_content = content.lstrip() if content.strip() else ""
-                _add_simple_list_item(block, list_token, item_content)
-                state.cursor = line_end
-                continue
-
-            else:
-                # Different level - we're done with this list
-                break
-        else:
-            # Not a list item - we're done
-            break
-
-
-def _add_simple_list_item(block, list_token: Dict[str, Any], content: str):
-    """Add a simple list item with just text content."""
-
-    # Create child state and parse the content
-    child_state = BlockState()
-    child_state.process(content)
-
-    # Simple parsing - just create a text token
-    if content.strip():
-        child_tokens = [{"type": "text", "raw": content}]
-    else:
-        child_tokens = []
-
-    # Create the list item token
-    list_item = {
-        "type": "list_item",
-        "children": [{"type": "block_text", "children": child_tokens}]
-        if child_tokens
-        else [],
-    }
-
-    list_token["children"].append(list_item)
-
-
 def parse_visual_list_nested(block, m: Match, state: BlockState):
     """Parse lists with visual nesting detection for m2r2 compatibility."""
     # Collect all consecutive list items first
@@ -302,17 +166,11 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
         "content_lines": [text.strip()] if text and text.strip() else [],
         "ordered": len(marker) > 1,
     }
-    # Calculate minimum indent for continuation lines
-    # Content should be indented at least to align with text after marker
-    marker_end_col = len(leading_spaces) + len(marker) + 1  # +1 for space after marker
 
     # Advance cursor past the first matched line
     state.cursor = first_match.end()
     if state.cursor < state.cursor_max and state.src[state.cursor] == "\n":
         state.cursor += 1
-
-    # Track blank line state for detecting list termination
-    saw_blank_line = False
 
     # Continue reading lines to find more list items and continuation lines
     while state.cursor < state.cursor_max:
@@ -321,7 +179,6 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
 
         # Check if this is a blank line
         if block.BLANK_LINE.match(line):
-            saw_blank_line = True
             state.cursor = line_end
             continue
 
@@ -351,8 +208,6 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
                 else [],
                 "ordered": len(marker) > 1,
             }
-            marker_end_col = len(spaces) + len(marker) + 1
-            saw_blank_line = False
             state.cursor = line_end
         else:
             # Check if this is a continuation line (indented text that's part of current item)
@@ -371,7 +226,6 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
                     else stripped.lstrip()
                 )
                 current_item["content_lines"].append(content_text)
-                saw_blank_line = False
                 state.cursor = line_end
             else:
                 # Not a list item or continuation - stop collecting
@@ -390,15 +244,15 @@ def _collect_all_list_items(block, state: BlockState, first_match: Match):
     return items
 
 
-def _build_nested_lists(items: List[Dict]) -> List[Dict[str, Any]]:
+def _build_nested_lists(items: list[dict]) -> list[dict[str, Any]]:
     """Build nested list structure from flat items using a stack-based approach."""
     if not items:
         return []
 
     # Stack to keep track of current lists at each indentation level
     # Each element is (indent_level, list_token, last_item)
-    list_stack = []
-    root_lists = []
+    list_stack: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+    root_lists: list[dict[str, Any]] = []
 
     for item in items:
         current_indent = item["indent"]
@@ -408,7 +262,7 @@ def _build_nested_lists(items: List[Dict]) -> List[Dict[str, Any]]:
             list_stack.pop()
 
         # Create list item
-        list_item = {"type": "list_item", "children": []}
+        list_item: dict[str, Any] = {"type": "list_item", "children": []}
 
         if item["content"]:
             text_token = {
@@ -446,7 +300,7 @@ def _build_nested_lists(items: List[Dict]) -> List[Dict[str, Any]]:
 
         else:
             # This is a nested item
-            parent_indent, parent_list, parent_item = list_stack[-1]
+            _, _, parent_item = list_stack[-1]
 
             # Check if we need a new nested list or can add to existing
             if (
@@ -474,66 +328,6 @@ def _build_nested_lists(items: List[Dict]) -> List[Dict[str, Any]]:
             list_stack.append((current_indent, nested_list, list_item))
 
     return root_lists
-
-
-def _add_list_item(
-    block, list_token: Dict[str, Any], content_lines: List[str], indent_level: int
-):
-    """Add a list item with its content to the list token."""
-
-    # Join content and create child state for parsing
-    content = "\n".join(content_lines).strip()
-    if not content:
-        content = ""
-
-    # Create child state and parse the content
-    child_state = BlockState()
-    child_state.process(content)
-
-    # Parse the content with appropriate rules
-    # Use the same rules as the original list parser but only valid ones
-    available_rules = [
-        "fenced_code",
-        "indent_code",
-        "atx_heading",
-        "setex_heading",
-        "thematic_break",
-        "block_quote",
-        "list",  # Allow nested lists
-        "ref_link",
-        "raw_html",
-        "blank_line",
-    ]
-
-    # Only use rules that exist in the block specification
-    rules = [rule for rule in available_rules if rule in block.specification]
-
-    block.parse(child_state, rules)
-
-    # Check if this creates a tight or loose list
-    if list_token["tight"] and _has_paragraph_breaks(child_state.tokens):
-        list_token["tight"] = False
-
-    # Create the list item token
-    list_item = {
-        "type": "list_item",
-        "children": child_state.tokens,
-    }
-
-    list_token["children"].append(list_item)
-
-
-def _has_paragraph_breaks(tokens: List[Dict[str, Any]]) -> bool:
-    """Check if tokens indicate loose list formatting."""
-    paragraph_count = 0
-    for tok in tokens:
-        if tok["type"] == "blank_line":
-            return True
-        if tok["type"] == "paragraph":
-            paragraph_count += 1
-            if paragraph_count > 1:
-                return True
-    return False
 
 
 def rst_directives(md):

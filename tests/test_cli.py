@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
-from m2r2.cli.m2r2 import convert_file, main
+from m2r2.cli.m2r2 import main, parse_from_file
 
 curdir = Path(__file__).parent
 test_md = curdir / "test.md"
@@ -36,8 +36,8 @@ class TestConvert(TestCase):
         self.assertIn("usage", message)
         self.assertIn("required: FILE", message)
 
-    def test_convert_file(self):
-        output = convert_file(test_md)
+    def test_parse_file(self):
+        output = parse_from_file(test_md)
         expected = test_rst.read_text()
         self.assertEqual(output.strip(), expected.strip())
 

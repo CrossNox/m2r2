@@ -7,8 +7,6 @@ from docutils.utils import column_width
 from mistune.core import BlockState
 from mistune.renderers.rst import RSTRenderer
 
-_is_sphinx = False
-
 
 class RestRenderer(RSTRenderer):
     _include_raw_html = False
@@ -27,6 +25,7 @@ class RestRenderer(RSTRenderer):
         self.parse_relative_links = kwargs.pop("parse_relative_links", False)
         self.anonymous_references = kwargs.pop("anonymous_references", False)
         self.use_mermaid = kwargs.pop("use_mermaid", False)
+        self.is_sphinx = kwargs.pop("is_sphinx", False)
         super().__init__(*args, **kwargs)
 
     def iter_tokens(
@@ -83,7 +82,7 @@ class RestRenderer(RSTRenderer):
         return out
 
     def finalize(self, data):
-        return "".join(filter(lambda x: x is not None, data))
+        return "".join(x for x in data if x is not None)
 
     def thematic_break(self, token, state):
         """Override to use shorter horizontal rule"""
@@ -128,7 +127,7 @@ class RestRenderer(RSTRenderer):
             first_line = "\n.. mermaid::\n\n"
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
-        elif _is_sphinx:
+        elif self.is_sphinx:
             first_line = "\n::\n\n"
         else:
             first_line = "\n.. code-block::\n\n"

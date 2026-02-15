@@ -42,9 +42,7 @@ class RendererTestBase(TestCase):
         pub.set_source(rst, source_path=None)
         pub.set_destination(destination=None, destination_path=None)
         output = pub.publish(enable_exit_status=False)
-        # Check that there are no RST warnings/errors (max_level should be < 2)
-        # Level 0 = info, 1 = warning, 2 = error, 3 = severe, 4 = fatal
-        self.assertLess(pub.document.reporter.max_level, 2)
+        self.assertLess(pub.document.reporter.max_level, 0)
         return output, pub
 
 

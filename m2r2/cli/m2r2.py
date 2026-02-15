@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def convert_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
+def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
     """Read a Markdown file and convert it to reStructuredText.
 
     Args:
@@ -115,7 +115,7 @@ def run_m2r2(args: argparse.Namespace) -> None:
         args: Parsed command-line arguments.
     """
     for file in args.input_files:
-        output = convert_file(
+        output = parse_from_file(
             file,
             no_underscore_emphasis=args.no_underscore_emphasis,
             parse_relative_links=args.parse_relative_links,

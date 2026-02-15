@@ -87,12 +87,12 @@ print(rst)
 # Sentence.
 ```
 
-Or, use `convert_file` function to load a markdown file and obtain converted text.
+Or, use `parse_from_file` function to load a markdown file and obtain converted text.
 
 ```python
-from m2r2.cli import convert_file
+from m2r2.cli import parse_from_file
 
-output = convert_file('markdown_file.md')
+output = parse_from_file('markdown_file.md')
 ```
 
 ### Sphinx Integration

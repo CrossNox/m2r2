@@ -84,10 +84,10 @@ m2r2/
 │   └── m2r2.py          # CLI implementation
 ├── rst/                 # RST rendering components
 │   ├── renderer.py      # Custom RST renderer
-│   ├── plugins.py       # Mistune plugins for RST
-│   └── directives.py    # Sphinx directives (mdinclude)
+│   └── plugins.py       # Mistune plugins for RST
 └── sphinx/              # Sphinx extension
-    └── m2r2.py          # Sphinx setup() function
+    ├── m2r2.py          # Sphinx setup() function
+    └── directives.py    # MdInclude directive
 ```
 
 ## Making Changes
