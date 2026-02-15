@@ -331,19 +331,17 @@ class RestRenderer(RSTRenderer):
         tight = token.get("tight", True)
 
         # Track list depth and cumulative indent for proper nesting
-        if not hasattr(state, "list_depth"):
-            state.list_depth = 0
-        if not hasattr(state, "list_indent"):
-            state.list_indent = ""
+        state.env.setdefault("list_depth", 0)
+        state.env.setdefault("list_indent", "")
 
-        current_depth = state.list_depth
-        current_indent = state.list_indent
-        state.list_depth += 1
+        current_depth = state.env["list_depth"]
+        current_indent = state.env["list_indent"]
+        state.env["list_depth"] += 1
 
         # Calculate indent for nested content based on marker width
         # Ordered lists use "#. " (3 chars), unordered use "* " (2 chars)
         marker_width = 3 if ordered else 2
-        state.list_indent = current_indent + " " * marker_width
+        state.env["list_indent"] = current_indent + " " * marker_width
 
         # Process list items
         items = []
@@ -355,8 +353,8 @@ class RestRenderer(RSTRenderer):
                 )
                 items.append(item_content)
 
-        state.list_depth -= 1
-        state.list_indent = current_indent
+        state.env["list_depth"] -= 1
+        state.env["list_indent"] = current_indent
 
         # Join items
         result = "".join(items)

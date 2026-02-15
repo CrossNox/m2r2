@@ -7,7 +7,7 @@ from docutils import io
 from docutils.core import Publisher
 
 from m2r2 import convert
-from m2r2.constants import PROLOG
+from m2r2.m2r2 import PROLOG
 
 
 class RendererTestBase(TestCase):

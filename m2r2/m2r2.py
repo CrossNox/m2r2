@@ -7,9 +7,15 @@ import mistune
 from mistune.plugins.footnotes import footnotes
 from mistune.plugins.table import table
 
-from m2r2.constants import PROLOG
 from m2r2.rst.plugins import rst_directives
 from m2r2.rst.renderer import RestRenderer
+
+# RST role definition prepended to output when raw HTML is used
+PROLOG = """\
+.. role:: raw-html-m2r(raw)
+   :format: html
+
+"""
 
 # Pattern to merge adjacent raw-html-m2r roles
 # Matches: :raw-html-m2r:`<tag>`\ text\ :raw-html-m2r:`</tag>`
@@ -105,6 +111,7 @@ class M2R2:
         self.renderer = renderer
 
     def parse(self, s):
+        self.renderer._include_raw_html = False
         output = self.md(s)
         return self.post_process(output)
 
