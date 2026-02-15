@@ -27,6 +27,7 @@ Thank you for your interest in contributing to M2R2!
 3. Install pre-commit hooks:
    ```bash
    uv run pre-commit install
+   uv run pre-commit install -t pre-push
    ```
 
 ## Development Commands
