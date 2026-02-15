@@ -14,7 +14,7 @@ M2R2_CONFIG = (
 
 
 def setup(app):
-    """When used for sphinx extension."""
+    """Register m2r2 config values, source parser, and mdinclude directive."""
     for conf_name, _, default in M2R2_CONFIG:
         if conf_name == "m2r_use_mermaid":
             default = "sphinxcontrib.mermaid" in app.config.extensions

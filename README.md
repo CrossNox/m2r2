@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/m2r2.svg)](https://pypi.python.org/pypi/m2r2)
 [![PyPI version](https://img.shields.io/pypi/pyversions/m2r2.svg)](https://pypi.python.org/pypi/m2r2)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://crossnox.github.io/m2r2)
-![Python package](https://github.com/CrossNox/m2r2/workflows/Python%20package/badge.svg)
+![Tests](https://github.com/CrossNox/m2r2/actions/workflows/tests.yml/badge.svg)
 
 ---
 

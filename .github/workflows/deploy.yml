@@ -9,6 +9,7 @@ on:
 jobs:
   untagged_deploy:
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/tags') }}
     steps:
       - uses: actions/checkout@v4
 

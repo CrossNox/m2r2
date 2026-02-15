@@ -645,7 +645,7 @@ class TestList(RendererTestBase):
         # (check_rst validates this produces valid RST)
 
 
-class TestConplexText(RendererTestBase):
+class TestComplexText(RendererTestBase):
     def test_code(self):
         src = """
 some sentence

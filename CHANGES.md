@@ -20,10 +20,6 @@
 * Add support for mermaid code
 * Change bump for bump2version
 
-### Version 0.3.0 (2021-07-12)
-* Add support for mermaid code
-* Change bump for bump2version
-
 ### Version 0.2.8 (2021-06-23)
 * Fix bug that made multiple inline mathematical expressions fail to render
 

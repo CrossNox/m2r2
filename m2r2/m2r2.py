@@ -60,11 +60,12 @@ class M2R2:
         kwargs = {kwarg: getattr(config, conf) for conf, kwarg, _ in M2R2_CONFIG}
         return cls(**kwargs, is_sphinx=True)
 
-    def __init__(self, renderer=None, block=None, inline=None, plugins=None, **kwargs):
+    def __init__(self, renderer=None, plugins=None, **kwargs):
         disable_inline_math = kwargs.pop("disable_inline_math", False)
         no_underscore_emphasis = kwargs.pop("no_underscore_emphasis", False)
 
-        renderer = renderer or RestRenderer(**kwargs)
+        if renderer is None:
+            renderer = RestRenderer(**kwargs)
 
         if plugins is None:
             plugins = []
@@ -139,4 +140,13 @@ class M2R2:
 
 
 def convert(text, **kwargs):
+    """Convert a Markdown string to reStructuredText.
+
+    Args:
+        text: Markdown source text.
+        **kwargs: Options passed to M2R2 constructor.
+
+    Returns:
+        The converted reStructuredText string.
+    """
     return M2R2(**kwargs)(text)

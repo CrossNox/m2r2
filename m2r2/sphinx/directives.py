@@ -3,6 +3,7 @@ from typing import ClassVar
 
 from docutils import io, statemachine, utils
 from docutils.parsers import rst
+from docutils.parsers.rst import directives
 
 from m2r2 import M2R2
 
@@ -18,6 +19,8 @@ class MdInclude(rst.Directive):
     option_spec: ClassVar[dict] = {
         "start-line": int,
         "end-line": int,
+        "encoding": directives.encoding,
+        "tab-width": int,
     }
 
     def run(self):

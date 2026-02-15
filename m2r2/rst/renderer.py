@@ -10,7 +10,6 @@ from mistune.renderers.rst import RSTRenderer
 
 class RestRenderer(RSTRenderer):
     indent = " " * 3
-    list_marker = "{#__rest_list_mark__#}"
     hmarks: ClassVar[dict[int, str]] = {
         1: "=",
         2: "-",
@@ -28,7 +27,7 @@ class RestRenderer(RSTRenderer):
         super().__init__(*args, **kwargs)
 
     def iter_tokens(
-        self, tokens: Iterable[dict[str, Any]], state: "BlockState"
+        self, tokens: Iterable[dict[str, Any]], state: BlockState
     ) -> Iterable[str]:
         """Override to preserve blank lines around RST directives.
 
@@ -39,7 +38,6 @@ class RestRenderer(RSTRenderer):
         3. After a directive before other content (only if directive doesn't
            already have trailing blank lines)
         """
-        prev = None
         prev_tok = None
         pending_blank_lines = 0
 
@@ -65,8 +63,6 @@ class RestRenderer(RSTRenderer):
                             yield "\n"
             pending_blank_lines = 0
 
-            tok["prev"] = prev
-            prev = tok
             prev_tok = tok
             yield self.render_token(tok, state)
 
@@ -219,7 +215,7 @@ class RestRenderer(RSTRenderer):
                 # Example: [text](#anchor)
                 link_type = "ref"
         doc_link = f"{os.path.splitext(url_info.path)[0]}{anchor}"
-        # splittext approach works whether or not path is set. It
+        # splitext approach works whether or not path is set. It
         # will return an empty string if unset, which leads to
         # anchor only ref.
         return f":{link_type}:`{text} <{doc_link}>`"
@@ -396,8 +392,6 @@ class RestRenderer(RSTRenderer):
         for child_token in token["children"]:
             if child_token["type"] == "list":
                 has_nested_list = True
-                # Mark as having parent for proper spacing
-                child_token["parent"] = token
                 nested_content = self.render_token(child_token, state)
                 nested_lists.append(nested_content)
             elif child_token["type"] != "blank_line":
