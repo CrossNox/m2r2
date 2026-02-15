@@ -2,7 +2,6 @@
 """Tests for the m2r2 CLI."""
 
 import subprocess
-import sys
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
@@ -26,7 +25,7 @@ class TestConvert(TestCase):
 
     def test_no_file(self):
         p = subprocess.Popen(
-            [sys.executable, "-m", "m2r2"],
+            ["m2r2"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

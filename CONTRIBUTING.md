@@ -78,7 +78,6 @@ uv run sphinx-build -E -W -n -j auto -b html docs docs/_build/html
 ```
 m2r2/
 ├── __init__.py          # Exports M2R2, convert
-├── __main__.py          # Entry point for `python -m m2r2`
 ├── m2r2.py              # Core M2R2 converter class
 ├── parser.py            # Sphinx M2R2Parser integration
 ├── cli/                 # CLI module
