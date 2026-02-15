@@ -53,13 +53,12 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}
-          skip-existing: true
 
       - name: Install dependencies
         run: uv sync
 
       - name: Build documentation
-        run: uv run sphinx-build -E -n -j auto -b html docs docs/_build/html
+        run: uv run sphinx-build -W -E -n -j auto -b html docs docs/_build/html
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v4

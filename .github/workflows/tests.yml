@@ -25,14 +25,7 @@ jobs:
         run: uv sync --python ${{ matrix.python-version }}
 
       - name: Run tests
-        run: uv run --python ${{ matrix.python-version }} pytest --cov=m2r2 --cov-report=xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.11'
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
+        run: uv run --python ${{ matrix.python-version }} pytest
 
   sphinx:
     runs-on: ubuntu-latest
@@ -51,4 +44,4 @@ jobs:
         run: uv sync
 
       - name: Build documentation
-        run: uv run sphinx-build -E -n -j auto -b html docs docs/_build/html
+        run: uv run sphinx-build -W -E -n -j auto -b html docs docs/_build/html
