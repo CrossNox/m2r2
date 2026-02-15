@@ -1,5 +1,6 @@
 import os
-from typing import Any, Dict
+from collections.abc import Iterable
+from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from docutils.utils import column_width
@@ -14,7 +15,7 @@ class RestRenderer(RSTRenderer):
     # list_indent_re = re.compile(r"^(\s*(#\.|\*)\s)")
     indent = " " * 3
     list_marker = "{#__rest_list_mark__#}"
-    hmarks = {
+    hmarks: ClassVar[dict[int, str]] = {
         1: "=",
         2: "-",
         3: "^",
@@ -34,6 +35,49 @@ class RestRenderer(RSTRenderer):
         #        self.parse_relative_links = options.parse_relative_links
         #    if getattr(options, "anonymous_references", False):
         #       self.anonymous_references = options.anonymous_references
+
+    def iter_tokens(
+        self, tokens: Iterable[dict[str, Any]], state: "BlockState"
+    ) -> Iterable[str]:
+        """Override to preserve blank lines around RST directives.
+
+        The parent RSTRenderer ignores blank_line tokens, but we need them
+        to maintain proper spacing for RST directives. We emit blank lines:
+        1. Before a directive (RST requires blank line before directives)
+        2. Between consecutive directives (preserve exact spacing)
+        3. After a directive before other content (only if directive doesn't
+           already have trailing blank lines)
+        """
+        prev = None
+        prev_tok = None
+        pending_blank_lines = 0
+
+        for tok in tokens:
+            if tok["type"] == "blank_line":
+                pending_blank_lines += 1
+                continue
+
+            # Emit pending blank lines in these cases:
+            if pending_blank_lines > 0:
+                if tok["type"] == "directive":
+                    # Always emit blank lines before a directive
+                    for _ in range(pending_blank_lines):
+                        yield "\n"
+                elif prev_tok is not None and prev_tok["type"] == "directive":
+                    # After a directive, only emit if the directive didn't
+                    # already have trailing blank lines (single trailing \n)
+                    prev_raw = prev_tok.get("raw", "")
+                    trailing = len(prev_raw) - len(prev_raw.rstrip("\n"))
+                    if trailing <= 1:
+                        # No trailing blank lines in directive, emit them
+                        for _ in range(pending_blank_lines):
+                            yield "\n"
+            pending_blank_lines = 0
+
+            tok["prev"] = prev
+            prev = tok
+            prev_tok = tok
+            yield self.render_token(tok, state)
 
     def __call__(self, tokens, state):
         """Override to avoid stripping trailing newlines"""
@@ -78,7 +122,7 @@ class RestRenderer(RSTRenderer):
         self._include_raw_html = True
         return rf"\ :raw-html-m2r:`{html}`\ "
 
-    def block_code(self, token: Dict[str, Any], state: BlockState):
+    def block_code(self, token: dict[str, Any], state: BlockState):
         # Extract code content from token
         code_text = token.get("raw", "")
 
@@ -378,8 +422,12 @@ class RestRenderer(RSTRenderer):
     #     return marker
 
     def directive(self, token, state):
-        """Render RST directive token"""
-        # Get raw text directly to preserve indentation
+        """Render RST directive token.
+
+        Preserves the raw RST directive text. Trailing newlines are preserved
+        as-is for proper RST spacing between directives. The trailing newlines
+        represent blank lines in the source markdown.
+        """
         text = token.get("raw", "")
         if not text:
             # Fallback for old token format
@@ -387,13 +435,17 @@ class RestRenderer(RSTRenderer):
                 text = token["children"][0].get("raw", "")
             else:
                 text = token.get("text", "")
-        # For multiline directives, preserve trailing blank lines as-is
-        # For single line directives, strip trailing newline
-        if "\n" not in text.rstrip("\n"):
-            # Single line directive - no trailing newline
-            text = text.rstrip("\n")
-        # Add leading newline to separate from previous content (RST requires blank line before directive)
-        return "\n" + text
+
+        # Count trailing newlines
+        content = text.rstrip("\n")
+        trailing_newlines = len(text) - len(content)
+
+        if trailing_newlines > 1:
+            # Multiple trailing newlines = blank lines, preserve them all
+            return content + "\n" * trailing_newlines
+        else:
+            # Single or no trailing newline - just return content without newline
+            return content
 
     def image_link(self, token, state):
         """Render image link"""
