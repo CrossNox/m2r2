@@ -60,23 +60,17 @@ class TestBasic(RendererTestBase):
         self.assertEqual(out, "\n" + src)
 
     def test_multiline_paragraph(self):
-        src = "\n".join(
-            [
-                "first sentence.",
-                "second sentence.",
-            ]
-        )
+        src = """\
+first sentence.
+second sentence."""
         out = self.conv(src)
         self.assertEqual(out, "\n" + src + "\n")
 
     def test_multi_paragraph(self):
-        src = "\n".join(
-            [
-                "first paragraph.",
-                "",
-                "second paragraph.",
-            ]
-        )
+        src = """\
+first paragraph.
+
+second paragraph."""
         out = self.conv(src)
         self.assertEqual(out, "\n" + src + "\n")
 
@@ -323,47 +317,35 @@ class TestBlockQuote(RendererTestBase):
 
 class TestCodeBlock(RendererTestBase):
     def test_plain_code_block(self):
-        src = "\n".join(
-            [
-                "```",
-                "pip install sphinx",
-                "```",
-            ]
-        )
+        src = """\
+```
+pip install sphinx
+```"""
         out = self.conv(src)
         self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
 
     def test_plain_code_block_tilda(self):
-        src = "\n".join(
-            [
-                "~~~",
-                "pip install sphinx",
-                "~~~",
-            ]
-        )
+        src = """\
+~~~
+pip install sphinx
+~~~"""
         out = self.conv(src)
         self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
 
     def test_code_block_math(self):
-        src = "\n".join(
-            [
-                "```math",
-                "E = mc^2",
-                "```",
-            ]
-        )
+        src = """\
+```math
+E = mc^2
+```"""
         out = self.conv(src)
         self.assertEqual(out, "\n.. math::\n\n   E = mc^2\n")
 
     def test_plain_code_block_indent(self):
-        src = "\n".join(
-            [
-                "```",
-                "pip install sphinx",
-                "    new line",
-                "```",
-            ]
-        )
+        src = """\
+```
+pip install sphinx
+    new line
+```"""
         out = self.conv(src)
         self.assertEqual(
             out,
@@ -371,25 +353,19 @@ class TestCodeBlock(RendererTestBase):
         )
 
     def test_python_code_block(self):
-        src = "\n".join(
-            [
-                "```python",
-                "print(1)",
-                "```",
-            ]
-        )
+        src = """\
+```python
+print(1)
+```"""
         out = self.conv(src)
         self.assertEqual(out, "\n.. code-block:: python\n\n   print(1)\n")
 
     def test_python_code_block_indent(self):
-        src = "\n".join(
-            [
-                "```python",
-                "def a(i):",
-                "    print(i)",
-                "```",
-            ]
-        )
+        src = """\
+```python
+def a(i):
+    print(i)
+```"""
         out = self.conv(src)
         self.assertEqual(
             out,
@@ -437,15 +413,12 @@ class TestList(RendererTestBase):
         self.assertEqual(out, "\n\n#. list\n")
 
     def test_nested_ul(self):
-        src = "\n".join(
-            [
-                "* list 1",
-                "* list 2",
-                "  * list 2.1",
-                "  * list 2.2",
-                "* list 3",
-            ]
-        )
+        src = """\
+* list 1
+* list 2
+  * list 2.1
+  * list 2.2
+* list 3"""
         out = self.conv(src)
         self.assertEqual(
             out,
@@ -453,43 +426,40 @@ class TestList(RendererTestBase):
         )
 
     def test_nested_ul_2(self):
-        src = "\n".join(
-            [
-                "* list 1",
-                "* list 2",
-                "  * list 2.1",
-                "  * list 2.2",
-                "    * list 2.2.1",
-                "    * list 2.2.2",
-                "* list 3",
-            ]
-        )
+        src = """\
+* list 1
+* list 2
+  * list 2.1
+  * list 2.2
+    * list 2.2.1
+    * list 2.2.2
+* list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n\n* list 1\n"
-            "* list 2\n\n"
-            "  * list 2.1\n"
-            "  * list 2.2\n\n"
-            "    * list 2.2.1\n"
-            "    * list 2.2.2\n\n"
-            "* list 3\n",
-        )
+        expected = """\
+
+
+* list 1
+* list 2
+
+  * list 2.1
+  * list 2.2
+
+    * list 2.2.1
+    * list 2.2.2
+
+* list 3
+"""
+        self.assertEqual(out, expected)
 
     def test_nested_ol(self):
-        src = "\n".join(
-            [
-                "1. list 1",
-                "2. list 2",
-                "  2. list 2.1",
-                "  3. list 2.2",
-                "3. list 3",
-            ]
-        )
+        src = """\
+1. list 1
+2. list 2
+  2. list 2.1
+  3. list 2.2
+3. list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            """
+        expected = """
 
 #. list 1
 #. list 2
@@ -498,39 +468,34 @@ class TestList(RendererTestBase):
    #. list 2.2
 
 #. list 3
-""",
-        )
+"""
+        self.assertEqual(out, expected)
 
     def test_nested_ol_2(self):
-        src = "\n".join(
-            [
-                "1. list 1",
-                "2. list 2",
-                "  3. list 2.1",
-                "  4. list 2.2",
-                "    5. list 2.2.1",
-                "    6. list 2.2.2",
-                "7. list 3",
-            ]
-        )
+        src = """\
+1. list 1
+2. list 2
+  3. list 2.1
+  4. list 2.2
+    5. list 2.2.1
+    6. list 2.2.2
+7. list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "\n\n#. list 1",
-                    "#. list 2",
-                    "",
-                    "   #. list 2.1",
-                    "   #. list 2.2",
-                    "",
-                    "      #. list 2.2.1",
-                    "      #. list 2.2.2",
-                    "",
-                    "#. list 3\n",
-                ]
-            ),
-        )
+        expected = """\
+
+
+#. list 1
+#. list 2
+
+   #. list 2.1
+   #. list 2.2
+
+      #. list 2.2.1
+      #. list 2.2.2
+
+#. list 3
+"""
+        self.assertEqual(out, expected)
 
     def test_nested_mixed_1(self):
         src = """1. list 1
@@ -559,121 +524,106 @@ class TestList(RendererTestBase):
         self.assertEqual(out, expected)
 
     def test_nested_multiline_1(self):
-        src = "\n".join(
-            [
-                "* list 1",
-                "  list 1 cont",
-                "* list 2",
-                "  list 2 cont",
-                "  * list 2.1",
-                "    list 2.1 cont",
-                "  * list 2.2",
-                "    list 2.2 cont",
-                "    * list 2.2.1",
-                "    * list 2.2.2",
-                "* list 3",
-            ]
-        )
+        src = """\
+* list 1
+  list 1 cont
+* list 2
+  list 2 cont
+  * list 2.1
+    list 2.1 cont
+  * list 2.2
+    list 2.2 cont
+    * list 2.2.1
+    * list 2.2.2
+* list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "\n\n* list 1",
-                    "  list 1 cont",
-                    "* list 2",
-                    "  list 2 cont",
-                    "",
-                    "  * list 2.1",
-                    "    list 2.1 cont",
-                    "  * list 2.2",
-                    "    list 2.2 cont",
-                    "",
-                    "    * list 2.2.1",
-                    "    * list 2.2.2",
-                    "",
-                    "* list 3\n",
-                ]
-            ),
-        )
+        expected = """\
+
+
+* list 1
+  list 1 cont
+* list 2
+  list 2 cont
+
+  * list 2.1
+    list 2.1 cont
+  * list 2.2
+    list 2.2 cont
+
+    * list 2.2.1
+    * list 2.2.2
+
+* list 3
+"""
+        self.assertEqual(out, expected)
 
     def test_nested_multiline_2(self):
-        src = "\n".join(
-            [
-                "1. list 1",
-                "  list 1 cont",
-                "1. list 2",
-                "  list 2 cont",
-                "  1. list 2.1",
-                "    list 2.1 cont",
-                "  1. list 2.2",
-                "    list 2.2 cont",
-                "    1. list 2.2.1",
-                "    1. list 2.2.2",
-                "1. list 3",
-            ]
-        )
+        src = """\
+1. list 1
+  list 1 cont
+1. list 2
+  list 2 cont
+  1. list 2.1
+    list 2.1 cont
+  1. list 2.2
+    list 2.2 cont
+    1. list 2.2.1
+    1. list 2.2.2
+1. list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "\n\n#. list 1",
-                    "   list 1 cont",
-                    "#. list 2",
-                    "   list 2 cont",
-                    "",
-                    "   #. list 2.1",
-                    "      list 2.1 cont",
-                    "   #. list 2.2",
-                    "      list 2.2 cont",
-                    "",
-                    "      #. list 2.2.1",
-                    "      #. list 2.2.2",
-                    "",
-                    "#. list 3\n",
-                ]
-            ),
-        )
+        expected = """\
+
+
+#. list 1
+   list 1 cont
+#. list 2
+   list 2 cont
+
+   #. list 2.1
+      list 2.1 cont
+   #. list 2.2
+      list 2.2 cont
+
+      #. list 2.2.1
+      #. list 2.2.2
+
+#. list 3
+"""
+        self.assertEqual(out, expected)
 
     def test_nested_multiline_3(self):
-        src = "\n".join(
-            [
-                "1. list 1",
-                "  list 1 cont",
-                "1. list 2",
-                "  list 2 cont",
-                "  * list 2.1",
-                "    list 2.1 cont",
-                "  * list 2.2",
-                "    list 2.2 cont",
-                "    1. list 2.2.1",
-                "    1. list 2.2.2",
-                "1. list 3",
-            ]
-        )
+        src = """\
+1. list 1
+  list 1 cont
+1. list 2
+  list 2 cont
+  * list 2.1
+    list 2.1 cont
+  * list 2.2
+    list 2.2 cont
+    1. list 2.2.1
+    1. list 2.2.2
+1. list 3"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "\n\n#. list 1",
-                    "   list 1 cont",
-                    "#. list 2",
-                    "   list 2 cont",
-                    "",
-                    "   * list 2.1",
-                    "     list 2.1 cont",
-                    "   * list 2.2",
-                    "     list 2.2 cont",
-                    "",
-                    "     #. list 2.2.1",
-                    "     #. list 2.2.2",
-                    "",
-                    "#. list 3\n",
-                ]
-            ),
-        )
+        expected = """\
+
+
+#. list 1
+   list 1 cont
+#. list 2
+   list 2 cont
+
+   * list 2.1
+     list 2.1 cont
+   * list 2.2
+     list 2.2 cont
+
+     #. list 2.2.1
+     #. list 2.2.2
+
+#. list 3
+"""
+        self.assertEqual(out, expected)
 
 
 class TestConplexText(RendererTestBase):
@@ -697,62 +647,50 @@ end
 
 class TestTable(RendererTestBase):
     def test_table(self):
-        src = """h1 | h2 | h3\n--- | --- | ---\n1 | 2 | 3\n4 | 5 | 6"""
+        src = """\
+h1 | h2 | h3
+--- | --- | ---
+1 | 2 | 3
+4 | 5 | 6"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "",
-                    ".. list-table::",
-                    "   :header-rows: 1",
-                    "",
-                    "   * - h1",
-                    "     - h2",
-                    "     - h3",
-                    "   * - 1",
-                    "     - 2",
-                    "     - 3",
-                    "   * - 4",
-                    "     - 5",
-                    "     - 6",
-                    "",
-                    "",
-                ]
-            ),
-        )
+        expected = """
+.. list-table::
+   :header-rows: 1
+
+   * - h1
+     - h2
+     - h3
+   * - 1
+     - 2
+     - 3
+   * - 4
+     - 5
+     - 6
+
+"""
+        self.assertEqual(out, expected)
 
 
 class TestFootNote(RendererTestBase):
     def test_footnote(self):
-        src = "\n".join(
-            [
-                "This is a[^1] footnote[^2] ref[^ref] with rst [#a]_.",
-                "",
-                "[^1]: note 1",
-                "[^2]: note 2",
-                "[^ref]: note ref",
-                ".. [#a] note rst",
-            ]
-        )
+        src = """\
+This is a[^1] footnote[^2] ref[^ref] with rst [#a]_.
+
+[^1]: note 1
+[^2]: note 2
+[^ref]: note ref
+.. [#a] note rst"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n".join(
-                [
-                    "",
-                    "This is a\\ [#fn-1]_ "
-                    "footnote\\ [#fn-2]_ ref\\ [#fn-ref]_ with rst [#a]_.",
-                    "",
-                    ".. [#a] note rst",  # one empty line inserted...
-                    "",
-                    ".. [#fn-1] note 1",
-                    ".. [#fn-2] note 2",
-                    ".. [#fn-ref] note ref",
-                    "",
-                ]
-            ),
-        )
+        expected = """
+This is a\\ [#fn-1]_ footnote\\ [#fn-2]_ ref\\ [#fn-ref]_ with rst [#a]_.
+
+.. [#a] note rst
+
+.. [#fn-1] note 1
+.. [#fn-2] note 2
+.. [#fn-ref] note ref
+"""
+        self.assertEqual(out, expected)
 
     def test_sphinx_ref(self):
         src = "This is a sphinx [ref]_ global ref.\n\n.. [ref] ref text"
