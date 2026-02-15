@@ -4,8 +4,6 @@
 import re
 
 import mistune
-from docutils import statemachine
-from docutils.parsers import rst
 
 from m2r2.constants import PROLOG
 from m2r2.rst.plugins import rst_directives
@@ -128,24 +126,6 @@ class M2R2:
         ):
             return PROLOG + output
         return output
-
-
-class M2R2Parser(rst.Parser):
-    # Explicitly tell supported formats to sphinx
-    supported = ("markdown", "md", "mkd")
-
-    def parse(self, inputstring, document):
-        if isinstance(inputstring, statemachine.StringList):
-            inputstring = "\n".join(inputstring)
-        config = document.settings.env.config
-        converter = M2R2(
-            no_underscore_emphasis=config.no_underscore_emphasis,
-            parse_relative_links=config.m2r_parse_relative_links,
-            anonymous_references=config.m2r_anonymous_references,
-            disable_inline_math=config.m2r_disable_inline_math,
-            use_mermaid=config.m2r_use_mermaid,
-        )
-        super().parse(converter(inputstring), document)
 
 
 def convert(text, **kwargs):
