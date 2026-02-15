@@ -61,7 +61,7 @@ class MdInclude(rst.Directive):
         startline = self.options.get("start-line", None)
         endline = self.options.get("end-line", None)
         try:
-            if startline or (endline is not None):
+            if startline is not None or endline is not None:
                 lines = include_file.readlines()
                 rawtext = "".join(lines[startline:endline])
             else:

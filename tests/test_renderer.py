@@ -741,3 +741,68 @@ class TestRestCode(RendererTestBase):
         src = "a ::\n\n    code\n"
         out = self.conv(src)
         self.assertEqual(out, "\na\n\n.. code-block::\n\n   code\n")
+
+
+class TestMermaid(RendererTestBase):
+    def test_mermaid_code_block(self):
+        src = """\
+```mermaid
+graph TD
+    A --> B
+```"""
+        # conv_no_check: docutils doesn't know the mermaid directive
+        out = self.conv_no_check(src, use_mermaid=True)
+        self.assertEqual(out, "\n.. mermaid::\n\n   graph TD\n       A --> B\n")
+
+    def test_mermaid_disabled(self):
+        src = """\
+```mermaid
+graph TD
+    A --> B
+```"""
+        # conv_no_check: Pygments has no mermaid lexer
+        out = self.conv_no_check(src)
+        self.assertEqual(
+            out, "\n.. code-block:: mermaid\n\n   graph TD\n       A --> B\n"
+        )
+
+
+class TestIsSphinx(RendererTestBase):
+    def test_plain_code_block_sphinx(self):
+        src = """\
+```
+code
+```"""
+        out = self.conv(src, is_sphinx=True)
+        self.assertEqual(out, "\n::\n\n   code\n")
+
+    def test_plain_code_block_no_sphinx(self):
+        src = """\
+```
+code
+```"""
+        out = self.conv(src)
+        self.assertEqual(out, "\n.. code-block::\n\n   code\n")
+
+
+class TestRawHtmlProlog(RendererTestBase):
+    def test_prolog_not_added_without_html(self):
+        src = "plain text"
+        out = self.conv(src)
+        self.assertNotIn("raw-html-m2r", out)
+
+    def test_prolog_added_with_inline_html(self):
+        src = "text <b>bold</b> text"
+        out = self.conv(src)
+        self.assertIn(".. role:: raw-html-m2r(raw)", out)
+        self.assertIn(":raw-html-m2r:", out)
+
+    def test_prolog_not_sticky_across_calls(self):
+        """Ensure raw HTML in one document doesn't leak PROLOG into the next."""
+        from m2r2 import M2R2
+
+        converter = M2R2()
+        out1 = converter("text <b>bold</b> text")
+        self.assertIn("raw-html-m2r", out1)
+        out2 = converter("plain text")
+        self.assertNotIn("raw-html-m2r", out2)

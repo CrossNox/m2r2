@@ -9,7 +9,6 @@ from mistune.renderers.rst import RSTRenderer
 
 
 class RestRenderer(RSTRenderer):
-    _include_raw_html = False
     indent = " " * 3
     list_marker = "{#__rest_list_mark__#}"
     hmarks: ClassVar[dict[int, str]] = {
@@ -90,7 +89,6 @@ class RestRenderer(RSTRenderer):
 
     def linebreak(self, token, state):
         """Override to use raw HTML format instead of line blocks"""
-        self._include_raw_html = True
         return "\\ :raw-html-m2r:`<br>`\n"
 
     def paragraph(self, token, state):
@@ -111,7 +109,6 @@ class RestRenderer(RSTRenderer):
         )
 
     def _raw_html(self, html):
-        self._include_raw_html = True
         return rf"\ :raw-html-m2r:`{html}`\ "
 
     def block_code(self, token: dict[str, Any], state: BlockState):
@@ -246,7 +243,12 @@ class RestRenderer(RSTRenderer):
             return f"\n{text}\n"
 
     def rest_code_block(self, token, state):
-        """Render RST code block (::)"""
+        """Absorb standalone ``::`` lines.
+
+        Without this, a bare ``::`` would be parsed as a paragraph and
+        potentially trigger the eol_literal_marker inline rule. The actual
+        code block following ``::`` is handled by mistune's standard rules.
+        """
         return "\n\n"
 
     def block_quote(self, token, state):
@@ -321,7 +323,10 @@ class RestRenderer(RSTRenderer):
         return f"**{text}**"
 
     def block_text(self, token, state):
-        """Render block text (used in list items)"""
+        """Override to omit trailing newline that the parent adds.
+
+        The parent's ``+ "\\n"`` would break list item formatting.
+        """
         return self.render_children(token, state)
 
     def list(self, token, state):

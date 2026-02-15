@@ -95,3 +95,15 @@ class TestConvert(TestCase):
             main(["--disable-inline-math", "--dry-run", str(test_md)])
         self.assertIn("``$E = mc^2$``", m.call_args[0][0])
         self.assertNotIn(":math:", m.call_args[0][0])
+
+    def test_missing_file(self):
+        with self.assertRaises(FileNotFoundError):
+            parse_from_file("nonexistent.md")
+
+    def test_decline_overwrite(self):
+        test_rst.write_text("original")
+        with patch("builtins.input", return_value="n"):
+            with patch("builtins.print") as m_print:
+                main([str(test_md)])
+        self.assertEqual(test_rst.read_text(), "original")
+        m_print.assert_called_once_with(f"Skipping {test_md}")

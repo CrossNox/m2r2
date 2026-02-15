@@ -10,6 +10,25 @@ from mistune.plugins.table import table
 from m2r2.rst.plugins import rst_directives
 from m2r2.rst.renderer import RestRenderer
 
+# Asterisk-only patterns for no_underscore_emphasis mode
+_ASTERISK_EMPHASIS = r"^\*([^\*]+?)\*(?!\*)"
+_ASTERISK_STRONG = r"^\*\*([^\*]+?)\*\*(?!\*)"
+
+
+def _parse_emphasis_no_underscore(inline, m, state):
+    """Parse emphasis using only asterisks (ignoring underscores)."""
+    token = {"type": "emphasis", "raw": m.group(1)}
+    state.append_token(token)
+    return m.end()
+
+
+def _parse_strong_no_underscore(inline, m, state):
+    """Parse strong emphasis using only asterisks (ignoring underscores)."""
+    token = {"type": "strong", "raw": m.group(1)}
+    state.append_token(token)
+    return m.end()
+
+
 # RST role definition prepended to output when raw HTML is used
 PROLOG = """\
 .. role:: raw-html-m2r(raw)
@@ -36,14 +55,10 @@ class M2R2:
         Returns:
             M2R2 instance configured according to Sphinx settings.
         """
-        return cls(
-            no_underscore_emphasis=config.no_underscore_emphasis,
-            parse_relative_links=config.m2r_parse_relative_links,
-            anonymous_references=config.m2r_anonymous_references,
-            disable_inline_math=config.m2r_disable_inline_math,
-            use_mermaid=config.m2r_use_mermaid,
-            is_sphinx=True,
-        )
+        from m2r2.sphinx.m2r2 import M2R2_CONFIG
+
+        kwargs = {kwarg: getattr(config, conf) for conf, kwarg, _ in M2R2_CONFIG}
+        return cls(**kwargs, is_sphinx=True)
 
     def __init__(self, renderer=None, block=None, inline=None, plugins=None, **kwargs):
         disable_inline_math = kwargs.pop("disable_inline_math", False)
@@ -57,45 +72,21 @@ class M2R2:
         # Create custom plugin function that respects options
         def custom_rst_directives(md):
             rst_directives(md)
-            # Remove inline_math if disabled
             if disable_inline_math and "inline_math" in md.inline.rules:
                 md.inline.rules.remove("inline_math")
                 if hasattr(md.inline, "_rules"):
                     md.inline._rules.pop("inline_math", None)
-
-            # Handle no_underscore_emphasis option
             if no_underscore_emphasis:
-                # Override the built-in emphasis patterns to only use asterisks
-
-                def parse_emphasis_no_underscore(inline, m, state):
-                    """Parse emphasis without underscore support"""
-                    text = m.group(1)
-                    token = {"type": "emphasis", "raw": text}
-                    state.append_token(token)
-                    return m.end()
-
-                def parse_strong_no_underscore(inline, m, state):
-                    """Parse strong emphasis without underscore support"""
-                    text = m.group(1)
-                    token = {"type": "strong", "raw": text}
-                    state.append_token(token)
-                    return m.end()
-
-                # Override patterns to only match asterisk-based emphasis
-                ASTERISK_EMPHASIS = r"^\*([^\*]+?)\*(?!\*)"
-                ASTERISK_STRONG = r"^\*\*([^\*]+?)\*\*(?!\*)"
-
-                # Re-register with asterisk-only patterns
                 md.inline.register(
                     "emphasis",
-                    ASTERISK_EMPHASIS,
-                    parse_emphasis_no_underscore,
+                    _ASTERISK_EMPHASIS,
+                    _parse_emphasis_no_underscore,
                     before="codespan",
                 )
                 md.inline.register(
                     "strong",
-                    ASTERISK_STRONG,
-                    parse_strong_no_underscore,
+                    _ASTERISK_STRONG,
+                    _parse_strong_no_underscore,
                     before="codespan",
                 )
 
@@ -111,7 +102,6 @@ class M2R2:
         self.renderer = renderer
 
     def parse(self, s):
-        self.renderer._include_raw_html = False
         output = self.md(s)
         return self.post_process(output)
 
@@ -119,18 +109,22 @@ class M2R2:
         return self.parse(s)
 
     def post_process(self, text):
-        # Add leading newline to match expected output format, but not if already double newline
+        # Ensure output starts with exactly one leading newline
         if not text.startswith("\n"):
             text = "\n" + text
         elif text.startswith("\n\n\n"):
-            # Remove extra leading newline that sometimes gets added
             text = text[1:]
 
-        # Merge adjacent raw-html-m2r roles (mistune v3 tokenizes each HTML tag separately)
-        # Keep merging until no more matches (handles nested cases)
+        # Merge adjacent raw-html-m2r roles that mistune v3 splits across tokens.
+        # e.g. :raw-html-m2r:`<s>`\ text\ :raw-html-m2r:`</s>`
+        #   -> :raw-html-m2r:`<s>text</s>`
         while _RAW_HTML_MERGE_PATTERN.search(text):
             text = _RAW_HTML_MERGE_PATTERN.sub(r":raw-html-m2r:`\1\2\3`", text)
 
+        # Clean up RST escape sequences ("\ ") inserted by the renderer around
+        # inline roles. These backslash-space pairs are needed in RST to separate
+        # inline markup from surrounding text, but become redundant at line
+        # boundaries, before periods, or between spaces.
         output = (
             text.replace("\\ \n", "\n")
             .replace("\n\\ ", "\n")
@@ -138,10 +132,8 @@ class M2R2:
             .replace("\\  ", " ")
             .replace("\\ .", ".")
         )
-        if (
-            hasattr(self.renderer, "_include_raw_html")
-            and self.renderer._include_raw_html
-        ):
+
+        if ":raw-html-m2r:" in output:
             return PROLOG + output
         return output
 
