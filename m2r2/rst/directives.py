@@ -1,4 +1,5 @@
 import os
+from typing import ClassVar
 
 from docutils import io, statemachine, utils
 from docutils.parsers import rst
@@ -9,22 +10,17 @@ from m2r2 import M2R2
 class MdInclude(rst.Directive):
     """Directive class to include markdown in sphinx.
 
-    Load a file and convert it to rst and insert as a node. Currently
-    directive-specific options are not implemented.
+    Load a file and convert it to rst and insert as a node.
     """
 
     required_arguments = 1
     optional_arguments = 0
-    option_spec = {
+    option_spec: ClassVar[dict] = {
         "start-line": int,
         "end-line": int,
     }
 
     def run(self):
-        """Most of this method is from ``docutils.parser.rst.Directive``.
-
-        docutils version: 0.12
-        """
         if not self.state.document.settings.file_insertion_enabled:
             raise self.warning(f'"{self.name}" directive disabled.')
         source = self.state_machine.input_lines.source(
@@ -35,7 +31,7 @@ class MdInclude(rst.Directive):
         path = os.path.normpath(os.path.join(source_dir, path))
         path = utils.relative_path(None, path)
 
-        # get options (currently not use directive-specific options)
+        # get options
         encoding = self.options.get(
             "encoding", self.state.document.settings.input_encoding
         )
@@ -50,16 +46,16 @@ class MdInclude(rst.Directive):
             include_file = io.FileInput(
                 source_path=path, encoding=encoding, error_handler=e_handler
             )
-        except UnicodeEncodeError:
+        except UnicodeEncodeError as error:
             raise self.severe(
                 f'Problems with "{self.name}" directive path:\n'
                 f'Cannot encode input file path "{path}" '
                 "(wrong locale?)."
-            )
+            ) from error
         except OSError as error:
             raise self.severe(
                 f'Problems with "{self.name}" directive path:\n{io.error_string(error)}.'
-            )
+            ) from error
 
         # read from the file
         startline = self.options.get("start-line", None)
@@ -73,7 +69,7 @@ class MdInclude(rst.Directive):
         except UnicodeError as error:
             raise self.severe(
                 f'Problem with "{self.name}" directive:\n{io.error_string(error)}'
-            )
+            ) from error
 
         config = self.state.document.settings.env.config
         converter = M2R2(
