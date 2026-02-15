@@ -15,7 +15,7 @@ M2R2 is a fork of [m2r](https://github.com/miyakogi/m2r) which hasn't been updat
 
 ## Why another converter?
 
-I wanted to write sphinx document in markdown, since it's widely used now and easy to write code blocks and lists. However, converters using pandoc or recommonmark do not support many rst markups and sphinx extensions. For example, rst's reference link like ``see `ref`_`` (this is very convenient in long document in which same link appears multiple times) will be converted to a code block in HTML like `see <code>ref</code>_`, which is not expected.
+Sphinx documents benefit from being written in markdown, since it's widely used and easy to write code blocks and lists. However, converters using pandoc or recommonmark do not support many rst markups and sphinx extensions. For example, rst's reference link like ``see `ref`_`` (very convenient in long documents where the same link appears multiple times) gets converted to a code block in HTML like `see <code>ref</code>_`, which is not expected.
 
 ## Features
 
