@@ -261,9 +261,11 @@ def _build_nested_lists(items: list[dict]) -> list[dict[str, Any]]:
         list_item: dict[str, Any] = {"type": "list_item", "children": []}
 
         if item["content"]:
+            # Use "text" key so mistune's _iter_render runs the inline
+            # parser, producing proper children (codespan, emphasis, etc.)
             text_token = {
                 "type": "block_text",
-                "children": [{"type": "text", "raw": item["content"]}],
+                "text": item["content"],
             }
             list_item["children"].append(text_token)
 

@@ -623,6 +623,27 @@ class TestList(RendererTestBase):
 """
         self.assertEqual(out, expected)
 
+    def test_inline_markup_in_list(self):
+        """Inline markup (code spans, emphasis, links) must be parsed in list items."""
+        src = """\
+* plain text
+* text with ``code`` here
+* text with *emphasis* here
+* text with [link](http://example.com) here"""
+        out = self.conv(src)
+        self.assertIn("``code``", out)
+        self.assertIn("*emphasis*", out)
+        self.assertIn("`link <http://example.com>`_", out)
+
+    def test_codespan_with_role_in_list(self):
+        """Code spans containing RST role syntax must not break docutils."""
+        src = "* support backticks (`` `text`:role: style``)"
+        out = self.conv(src)
+        # The backtick-role content must be inside an RST inline literal
+        self.assertIn("``", out)
+        # Must NOT contain bare :role: outside of inline literal
+        # (check_rst validates this produces valid RST)
+
 
 class TestConplexText(RendererTestBase):
     def test_code(self):

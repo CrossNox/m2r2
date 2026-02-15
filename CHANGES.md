@@ -104,7 +104,7 @@
 ### Version 0.1.4 (2016-06-08)
 
 * Support indented directives/reST-comments
-* Support role-name after backticks
+* Support role-name after backticks (`` `text`:role: style``)
 
 ### Version 0.1.3 (2016-06-02)
 

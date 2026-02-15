@@ -290,8 +290,14 @@ class RestRenderer(RSTRenderer):
         return self._raw_html(html)
 
     def codespan(self, token, state):
-        """Render inline code span"""
-        code = token.get("raw", "")
+        """Render inline code span.
+
+        Leading/trailing whitespace is stripped because CommonMark's
+        double-backtick code spans can preserve spaces (e.g.
+        `` `text`:role: ``), and a leading space after RST's ``
+        breaks docutils' inline literal parser.
+        """
+        code = token.get("raw", "").strip()
         if "``" not in code:
             return rf"\ ``{code}``\ "
         else:
