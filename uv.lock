@@ -763,9 +763,9 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "docutils", specifier = ">=0.21.2" },
+    { name = "docutils", specifier = ">=0.19" },
     { name = "mistune", specifier = ">=3.0" },
-    { name = "sphinx", marker = "extra == 'sphinx'", specifier = ">=7.0" },
+    { name = "sphinx", marker = "extra == 'sphinx'", specifier = ">=1.7.0" },
 ]
 provides-extras = ["sphinx"]
 

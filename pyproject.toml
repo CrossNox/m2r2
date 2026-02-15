@@ -24,10 +24,10 @@ classifiers = [
   "Topic :: Text Processing :: Markup :: Markdown",
   "Topic :: Text Processing :: Markup :: reStructuredText",
 ]
-dependencies = ["mistune>=3.0", "docutils>=0.21.2"]
+dependencies = ["mistune>=3.0", "docutils>=0.19"]
 
 [project.optional-dependencies]
-sphinx = ["sphinx>=7.0"]
+sphinx = ["sphinx>=1.7.0"]
 
 [project.scripts]
 m2r2 = "m2r2.cli:main"
