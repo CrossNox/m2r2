@@ -12,13 +12,26 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
+def parse_from_file(
+    file: str | Path,
+    encoding: str = "utf-8",
+    *,
+    no_underscore_emphasis: bool = False,
+    disable_inline_math: bool = False,
+    parse_relative_links: bool = False,
+    anonymous_references: bool = False,
+    use_mermaid: bool = False,
+) -> str:
     """Read a Markdown file and convert it to reStructuredText.
 
     Args:
         file: Path to the Markdown file.
         encoding: File encoding. Defaults to "utf-8".
-        **kwargs: Options passed to convert().
+        no_underscore_emphasis: Disable underscore-based emphasis.
+        disable_inline_math: Disable inline math parsing.
+        parse_relative_links: Convert relative links to RST references.
+        anonymous_references: Use anonymous RST references.
+        use_mermaid: Render mermaid code blocks as directives.
 
     Returns:
         The converted reStructuredText content.
@@ -30,7 +43,14 @@ def parse_from_file(file: str | Path, encoding: str = "utf-8", **kwargs) -> str:
     if not path.exists():
         raise FileNotFoundError(f"No such file exists: {path}")
 
-    return convert(path.read_text(encoding=encoding), **kwargs)
+    return convert(
+        path.read_text(encoding=encoding),
+        no_underscore_emphasis=no_underscore_emphasis,
+        disable_inline_math=disable_inline_math,
+        parse_relative_links=parse_relative_links,
+        anonymous_references=anonymous_references,
+        use_mermaid=use_mermaid,
+    )
 
 
 def save_to_file(
