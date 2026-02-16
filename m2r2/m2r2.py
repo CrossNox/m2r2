@@ -71,8 +71,6 @@ class M2R2:
             rst_directives(md)
             if disable_inline_math and "inline_math" in md.inline.rules:
                 md.inline.rules.remove("inline_math")
-                if hasattr(md.inline, "_rules"):
-                    md.inline._rules.pop("inline_math", None)
             if no_underscore_emphasis:
                 md.inline.register(
                     "emphasis",
@@ -115,8 +113,12 @@ class M2R2:
         # Merge adjacent raw-html-m2r roles that mistune v3 splits across tokens.
         # e.g. :raw-html-m2r:`<s>`\ text\ :raw-html-m2r:`</s>`
         #   -> :raw-html-m2r:`<s>text</s>`
-        while _RAW_HTML_MERGE_PATTERN.search(text):
+        for _ in range(10):
+            if not _RAW_HTML_MERGE_PATTERN.search(text):
+                break
             text = _RAW_HTML_MERGE_PATTERN.sub(r":raw-html-m2r:`\1\2\3`", text)
+        else:
+            raise RuntimeError("raw-html-m2r merge did not converge")
 
         # Clean up RST escape sequences ("\ ") inserted by the renderer around
         # inline roles. These backslash-space pairs are needed in RST to separate
