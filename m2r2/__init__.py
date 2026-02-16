@@ -4,15 +4,8 @@ from .m2r2 import M2R2, convert
 
 __version__ = version(__name__)
 
+# Imported after __version__ is set to avoid circular import:
+# sphinx.m2r2 -> m2r2.__version__ must already exist.
+from .sphinx.m2r2 import setup
+
 __all__ = ("M2R2", "convert", "setup")
-
-
-def setup(app):
-    """Sphinx extension setup function.
-
-    This function is called by Sphinx when m2r2 is used as an extension.
-    It delegates to the actual setup in m2r2.sphinx.m2r2.
-    """
-    from .sphinx.m2r2 import setup as sphinx_setup
-
-    return sphinx_setup(app)

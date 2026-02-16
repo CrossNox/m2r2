@@ -19,12 +19,19 @@ class RestRenderer(RSTRenderer):
         6: "#",
     }
 
-    def __init__(self, *args, **kwargs):
-        self.parse_relative_links = kwargs.pop("parse_relative_links", False)
-        self.anonymous_references = kwargs.pop("anonymous_references", False)
-        self.use_mermaid = kwargs.pop("use_mermaid", False)
-        self.is_sphinx = kwargs.pop("is_sphinx", False)
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        *,
+        parse_relative_links: bool = False,
+        anonymous_references: bool = False,
+        use_mermaid: bool = False,
+        is_sphinx: bool = False,
+    ):
+        self.parse_relative_links = parse_relative_links
+        self.anonymous_references = anonymous_references
+        self.use_mermaid = use_mermaid
+        self.is_sphinx = is_sphinx
+        super().__init__()
 
     def iter_tokens(
         self, tokens: Iterable[dict[str, Any]], state: BlockState

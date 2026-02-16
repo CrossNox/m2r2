@@ -41,6 +41,17 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
 )
 
 
+# Mapping of Sphinx conf.py config names to M2R2 constructor kwargs.
+# Each entry: (sphinx_config_name, m2r2_kwarg, default_value)
+M2R2_CONFIG = (
+    ("no_underscore_emphasis", "no_underscore_emphasis", False),
+    ("m2r_parse_relative_links", "parse_relative_links", False),
+    ("m2r_anonymous_references", "anonymous_references", False),
+    ("m2r_disable_inline_math", "disable_inline_math", False),
+    ("m2r_use_mermaid", "use_mermaid", None),  # default computed at setup time
+)
+
+
 class M2R2:
     @classmethod
     def from_sphinx_config(cls, config):
@@ -52,17 +63,28 @@ class M2R2:
         Returns:
             M2R2 instance configured according to Sphinx settings.
         """
-        from m2r2.sphinx.m2r2 import M2R2_CONFIG
-
         kwargs = {kwarg: getattr(config, conf) for conf, kwarg, _ in M2R2_CONFIG}
         return cls(**kwargs, is_sphinx=True)
 
-    def __init__(self, renderer=None, plugins=None, **kwargs):
-        disable_inline_math = kwargs.pop("disable_inline_math", False)
-        no_underscore_emphasis = kwargs.pop("no_underscore_emphasis", False)
-
+    def __init__(
+        self,
+        renderer=None,
+        plugins=None,
+        *,
+        no_underscore_emphasis: bool = False,
+        disable_inline_math: bool = False,
+        parse_relative_links: bool = False,
+        anonymous_references: bool = False,
+        use_mermaid: bool = False,
+        is_sphinx: bool = False,
+    ):
         if renderer is None:
-            renderer = RestRenderer(**kwargs)
+            renderer = RestRenderer(
+                parse_relative_links=parse_relative_links,
+                anonymous_references=anonymous_references,
+                use_mermaid=use_mermaid,
+                is_sphinx=is_sphinx,
+            )
 
         if plugins is None:
             plugins = []
@@ -136,14 +158,35 @@ class M2R2:
         return output
 
 
-def convert(text, **kwargs):
+def convert(
+    text,
+    *,
+    no_underscore_emphasis: bool = False,
+    disable_inline_math: bool = False,
+    parse_relative_links: bool = False,
+    anonymous_references: bool = False,
+    use_mermaid: bool = False,
+    is_sphinx: bool = False,
+):
     """Convert a Markdown string to reStructuredText.
 
     Args:
         text: Markdown source text.
-        **kwargs: Options passed to M2R2 constructor.
+        no_underscore_emphasis: Disable underscore-based emphasis.
+        disable_inline_math: Disable inline math parsing.
+        parse_relative_links: Convert relative links to RST references.
+        anonymous_references: Use anonymous RST references.
+        use_mermaid: Render mermaid code blocks as directives.
+        is_sphinx: Use Sphinx-compatible output (e.g. ``::`` for code blocks).
 
     Returns:
         The converted reStructuredText string.
     """
-    return M2R2(**kwargs)(text)
+    return M2R2(
+        no_underscore_emphasis=no_underscore_emphasis,
+        disable_inline_math=disable_inline_math,
+        parse_relative_links=parse_relative_links,
+        anonymous_references=anonymous_references,
+        use_mermaid=use_mermaid,
+        is_sphinx=is_sphinx,
+    )(text)
