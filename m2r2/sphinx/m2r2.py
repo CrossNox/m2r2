@@ -1,4 +1,5 @@
-from m2r2 import __version__
+from importlib.metadata import version
+
 from m2r2.m2r2 import M2R2_CONFIG
 from m2r2.parser import M2R2Parser
 from m2r2.sphinx.directives import MdInclude
@@ -17,7 +18,7 @@ def setup(app):
         app.add_source_parser(M2R2Parser)
     app.add_directive("mdinclude", MdInclude)
     metadata = {
-        "version": __version__,
+        "version": version("m2r2"),
         "parallel_read_safe": True,
         "parallel_write_safe": True,
     }
