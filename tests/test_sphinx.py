@@ -6,6 +6,7 @@ using real Sphinx builds in temporary directories.
 
 import shutil
 import tempfile
+import warnings
 from io import StringIO
 from pathlib import Path
 from unittest import TestCase
@@ -91,6 +92,21 @@ class TestSetup(SphinxTestBase):
         """m2r_use_mermaid defaults to True when sphinxcontrib.mermaid is loaded."""
         app, _, _ = self.build(files={"index.md": "# Hello\n"})
         self.assertFalse(app.config.m2r_use_mermaid)
+
+    def test_deprecated_no_underscore_emphasis(self):
+        """Old 'no_underscore_emphasis' config emits deprecation and still works."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _, outdir, _ = self.build(
+                conf="no_underscore_emphasis = True",
+                files={"index.md": "# Test\n\n_underscored_ text\n"},
+            )
+        deprecation_msgs = [x for x in w if issubclass(x.category, DeprecationWarning)]
+        self.assertTrue(
+            any("no_underscore_emphasis" in str(m.message) for m in deprecation_msgs),
+        )
+        html = (outdir / "index.html").read_text()
+        self.assertIn("_underscored_", html)
 
 
 class TestM2R2Parser(SphinxTestBase):
