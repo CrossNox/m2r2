@@ -169,7 +169,6 @@ def convert(
     parse_relative_links: bool = False,
     anonymous_references: bool = False,
     use_mermaid: bool = False,
-    is_sphinx: bool = False,
 ):
     """Convert a Markdown string to reStructuredText.
 
@@ -180,7 +179,6 @@ def convert(
         parse_relative_links: Convert relative links to RST references.
         anonymous_references: Use anonymous RST references.
         use_mermaid: Render mermaid code blocks as directives.
-        is_sphinx: Use Sphinx-compatible output (e.g. ``::`` for code blocks).
 
     Returns:
         The converted reStructuredText string.
@@ -191,5 +189,4 @@ def convert(
         parse_relative_links=parse_relative_links,
         anonymous_references=anonymous_references,
         use_mermaid=use_mermaid,
-        is_sphinx=is_sphinx,
     )(text)

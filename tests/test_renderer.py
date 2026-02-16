@@ -4,7 +4,7 @@ from docutils import io
 from docutils.core import Publisher
 
 from m2r2 import convert
-from m2r2.m2r2 import PROLOG
+from m2r2.m2r2 import M2R2, PROLOG
 
 
 class RendererTestBase(TestCase):
@@ -791,7 +791,8 @@ class TestIsSphinx(RendererTestBase):
 ```
 code
 ```"""
-        out = self.conv(src, is_sphinx=True)
+        out = M2R2(is_sphinx=True)(src)
+        self.check_rst(out)
         self.assertEqual(out, "\n::\n\n   code\n")
 
     def test_plain_code_block_no_sphinx(self):
