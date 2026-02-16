@@ -49,7 +49,7 @@ templates_path = ["_templates"]
 # You can specify multiple suffix as a list of string:
 # source_suffix = ['.rst', '.md']
 source_suffix = ".md"
-no_underscore_emphasis = True
+m2r_no_underscore_emphasis = True
 m2r_parse_relative_links = True
 m2r_anonymous_references = False
 m2r_disable_inline_math = False

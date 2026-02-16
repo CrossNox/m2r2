@@ -65,7 +65,7 @@ class TestSetup(SphinxTestBase):
 
     def test_config_defaults_registered(self):
         app, _, _ = self.build(files={"index.md": "# Hello\n"})
-        self.assertFalse(app.config.no_underscore_emphasis)
+        self.assertFalse(app.config.m2r_no_underscore_emphasis)
         self.assertFalse(app.config.m2r_parse_relative_links)
         self.assertFalse(app.config.m2r_anonymous_references)
         self.assertFalse(app.config.m2r_disable_inline_math)
@@ -104,7 +104,7 @@ class TestM2R2Parser(SphinxTestBase):
 
     def test_no_underscore_emphasis_config(self):
         _, outdir, _ = self.build(
-            conf="no_underscore_emphasis = True",
+            conf="m2r_no_underscore_emphasis = True",
             files={"index.md": "# Test\n\n_underscored_ text\n"},
         )
         html = (outdir / "index.html").read_text()
@@ -210,7 +210,7 @@ class TestMdInclude(SphinxTestBase):
     def test_include_with_config_options(self):
         """mdinclude should respect Sphinx m2r2 config."""
         _, outdir, _ = self.build(
-            conf="no_underscore_emphasis = True",
+            conf="m2r_no_underscore_emphasis = True",
             files={
                 "index.rst": "Test\n====\n\n.. mdinclude:: included.md\n",
                 "included.md": "_underscored_\n",

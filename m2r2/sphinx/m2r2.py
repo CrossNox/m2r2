@@ -6,10 +6,10 @@ from m2r2.sphinx.directives import MdInclude
 
 def setup(app):
     """Register m2r2 config values, source parser, and mdinclude directive."""
-    for conf_name, _, default in M2R2_CONFIG:
-        if conf_name == "m2r_use_mermaid":
+    for kwarg, default in M2R2_CONFIG:
+        if kwarg == "use_mermaid":
             default = "sphinxcontrib.mermaid" in app.config.extensions
-        app.add_config_value(conf_name, default, "env")
+        app.add_config_value(f"m2r_{kwarg}", default, "env")
     try:
         app.add_source_parser(".md", M2R2Parser)  # for older sphinx versions
     except (TypeError, AttributeError):

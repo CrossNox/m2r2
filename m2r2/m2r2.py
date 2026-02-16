@@ -41,14 +41,14 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
 )
 
 
-# Mapping of Sphinx conf.py config names to M2R2 constructor kwargs.
-# Each entry: (sphinx_config_name, m2r2_kwarg, default_value)
+# Sphinx conf.py config options: (kwarg_name, default_value).
+# Each is registered as "m2r_{kwarg_name}" in Sphinx config.
 M2R2_CONFIG = (
-    ("no_underscore_emphasis", "no_underscore_emphasis", False),
-    ("m2r_parse_relative_links", "parse_relative_links", False),
-    ("m2r_anonymous_references", "anonymous_references", False),
-    ("m2r_disable_inline_math", "disable_inline_math", False),
-    ("m2r_use_mermaid", "use_mermaid", None),  # default computed at setup time
+    ("no_underscore_emphasis", False),
+    ("parse_relative_links", False),
+    ("anonymous_references", False),
+    ("disable_inline_math", False),
+    ("use_mermaid", False),
 )
 
 
@@ -63,7 +63,7 @@ class M2R2:
         Returns:
             M2R2 instance configured according to Sphinx settings.
         """
-        kwargs = {kwarg: getattr(config, conf) for conf, kwarg, _ in M2R2_CONFIG}
+        kwargs = {kwarg: getattr(config, f"m2r_{kwarg}") for kwarg, _ in M2R2_CONFIG}
         return cls(**kwargs, is_sphinx=True)
 
     def __init__(
