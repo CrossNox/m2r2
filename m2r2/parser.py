@@ -16,6 +16,5 @@ class M2R2Parser(rst.Parser):
             anonymous_references=config.m2r_anonymous_references,
             disable_inline_math=config.m2r_disable_inline_math,
             use_mermaid=config.m2r_use_mermaid,
-            is_sphinx=True,
         )
         super().parse(converter(inputstring), document)

@@ -55,14 +55,12 @@ class M2R2:
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
-        is_sphinx: bool = False,
     ):
         if renderer is None:
             renderer = RestRenderer(
                 parse_relative_links=parse_relative_links,
                 anonymous_references=anonymous_references,
                 use_mermaid=use_mermaid,
-                is_sphinx=is_sphinx,
             )
 
         if plugins is None:

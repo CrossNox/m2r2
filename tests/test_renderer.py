@@ -3,8 +3,8 @@ from unittest import TestCase, skip
 from docutils import io
 from docutils.core import Publisher
 
-from m2r2 import convert
-from m2r2.m2r2 import M2R2, PROLOG
+from m2r2 import M2R2, convert
+from m2r2.m2r2 import PROLOG
 
 
 class RendererTestBase(TestCase):
@@ -785,25 +785,6 @@ graph TD
         )
 
 
-class TestIsSphinx(RendererTestBase):
-    def test_plain_code_block_sphinx(self):
-        src = """\
-```
-code
-```"""
-        out = M2R2(is_sphinx=True)(src)
-        self.check_rst(out)
-        self.assertEqual(out, "\n::\n\n   code\n")
-
-    def test_plain_code_block_no_sphinx(self):
-        src = """\
-```
-code
-```"""
-        out = self.conv(src)
-        self.assertEqual(out, "\n.. code-block::\n\n   code\n")
-
-
 class TestRawHtmlProlog(RendererTestBase):
     def test_prolog_not_added_without_html(self):
         src = "plain text"
@@ -818,8 +799,6 @@ class TestRawHtmlProlog(RendererTestBase):
 
     def test_prolog_not_sticky_across_calls(self):
         """Ensure raw HTML in one document doesn't leak PROLOG into the next."""
-        from m2r2 import M2R2
-
         converter = M2R2()
         out1 = converter("text <b>bold</b> text")
         self.assertIn("raw-html-m2r", out1)

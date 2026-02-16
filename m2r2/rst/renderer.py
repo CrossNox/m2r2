@@ -25,12 +25,10 @@ class RestRenderer(RSTRenderer):
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
-        is_sphinx: bool = False,
     ):
         self.parse_relative_links = parse_relative_links
         self.anonymous_references = anonymous_references
         self.use_mermaid = use_mermaid
-        self.is_sphinx = is_sphinx
         super().__init__()
 
     def iter_tokens(
@@ -127,8 +125,6 @@ class RestRenderer(RSTRenderer):
             first_line = "\n.. mermaid::\n\n"
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
-        elif self.is_sphinx:
-            first_line = "\n::\n\n"
         else:
             first_line = "\n.. code-block::\n\n"
         return first_line + self._indent_block(code_text) + "\n"
