@@ -1,4 +1,5 @@
 import re
+from importlib.metadata import version
 
 import mistune
 from mistune.plugins.footnotes import footnotes
@@ -6,6 +7,8 @@ from mistune.plugins.table import table
 
 from m2r2.rst.plugins import rst_directives
 from m2r2.rst.renderer import RestRenderer
+
+__version__ = version("m2r2")
 
 # Asterisk-only patterns for no_underscore_emphasis mode
 _ASTERISK_EMPHASIS = r"^\*([^\*]+?)\*(?!\*)"
