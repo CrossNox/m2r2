@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from m2r2 import convert
+from m2r2.m2r2 import convert
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
