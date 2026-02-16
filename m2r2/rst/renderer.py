@@ -307,6 +307,11 @@ class RestRenderer(RSTRenderer):
                 "</code>"
             )
 
+    def strikethrough(self, token, state):
+        """Render strikethrough as raw HTML ``<del>`` via raw-html-m2r role."""
+        text = self.render_children(token, state)
+        return self._raw_html(f"<del>{text}</del>")
+
     def emphasis(self, token, state):
         """Override to handle custom emphasis tokens"""
         if "raw" in token:

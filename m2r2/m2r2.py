@@ -3,6 +3,7 @@ from importlib.metadata import version
 
 import mistune
 from mistune.plugins.footnotes import footnotes
+from mistune.plugins.formatting import strikethrough
 from mistune.plugins.table import table
 
 from m2r2.rst.plugins import rst_directives
@@ -88,9 +89,10 @@ class M2R2:
         # Add RST directive plugin function
         plugins.append(custom_rst_directives)
 
-        # Add table and footnote support
+        # Add table, footnote, and strikethrough support
         plugins.append(table)
         plugins.append(footnotes)
+        plugins.append(strikethrough)
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=renderer, plugins=plugins)
