@@ -2,6 +2,9 @@ from unittest import TestCase, skip
 
 from docutils import io
 from docutils.core import Publisher
+from docutils.parsers.rst import Parser as RstParser
+from docutils.readers.standalone import Reader
+from docutils.writers.pseudoxml import Writer
 
 from m2r2 import M2R2, convert
 from m2r2.m2r2 import PROLOG
@@ -19,17 +22,11 @@ class RendererTestBase(TestCase):
 
     def check_rst(self, rst):
         pub = Publisher(
-            reader=None,
-            parser=None,
-            writer=None,
-            settings=None,
+            reader=Reader(),
+            parser=RstParser(),
+            writer=Writer(),
             source_class=io.StringInput,
             destination_class=io.StringOutput,
-        )
-        pub.set_components(
-            reader_name="standalone",
-            parser_name="restructuredtext",
-            writer_name="pseudoxml",
         )
         pub.process_programmatic_settings(
             settings_spec=None,
@@ -102,7 +99,10 @@ class TestInlineMarkdown(RendererTestBase):
 
     def test_strikethrough(self):
         src = "~~a~~"
-        self.conv(src)
+        out = self.conv(src)
+        self.assertIn(":raw-html-m2r:", out)
+        self.assertIn("<del>", out)
+        self.assertIn("</del>", out)
 
     def test_emphasis(self):
         src = "*a*"
