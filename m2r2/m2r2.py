@@ -44,31 +44,7 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
 )
 
 
-# Sphinx conf.py config options: (kwarg_name, default_value).
-# Each is registered as "m2r_{kwarg_name}" in Sphinx config.
-M2R2_CONFIG = (
-    ("no_underscore_emphasis", False),
-    ("parse_relative_links", False),
-    ("anonymous_references", False),
-    ("disable_inline_math", False),
-    ("use_mermaid", False),
-)
-
-
 class M2R2:
-    @classmethod
-    def from_sphinx_config(cls, config):
-        """Create an M2R2 instance from Sphinx configuration.
-
-        Args:
-            config: Sphinx config object with m2r2 settings.
-
-        Returns:
-            M2R2 instance configured according to Sphinx settings.
-        """
-        kwargs = {kwarg: getattr(config, f"m2r_{kwarg}") for kwarg, _ in M2R2_CONFIG}
-        return cls(**kwargs, is_sphinx=True)
-
     def __init__(
         self,
         renderer=None,
