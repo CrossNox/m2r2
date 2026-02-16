@@ -107,3 +107,14 @@ class TestConvert(TestCase):
                 main([str(test_md)])
         self.assertEqual(test_rst.read_text(), "original")
         m_print.assert_called_once_with(f"Skipping {test_md}")
+
+    def test_subprocess_convert(self):
+        """Integration test: convert a file via ``python -m m2r2 --dry-run``."""
+        p = subprocess.run(
+            [sys.executable, "-m", "m2r2", "--dry-run", str(test_md)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(p.returncode, 0, msg=p.stderr)
+        expected = test_rst.read_text()
+        self.assertEqual(p.stdout.strip(), expected.strip())
