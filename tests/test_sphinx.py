@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Sphinx integration tests for m2r2.
 
 Tests the Sphinx extension setup(), M2R2Parser, and MdInclude directive

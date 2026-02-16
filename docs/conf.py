@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # M2R documentation build configuration file, created by
 # sphinx-quickstart on Sat May 28 09:30:21 2016.
@@ -184,7 +182,12 @@ html_static_path = ["_static"]
 
 # Custom sidebar templates, maps document names to template names.
 html_sidebars = {
-    "**": ["about.html", "navigation.html", "relations.html", "searchbox.html",]
+    "**": [
+        "about.html",
+        "navigation.html",
+        "relations.html",
+        "searchbox.html",
+    ]
 }
 
 # Additional templates that should be rendered to pages, maps page names to
