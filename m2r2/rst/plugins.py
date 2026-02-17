@@ -63,7 +63,7 @@ def parse_oneline_directive(block, m: Match, state: BlockState):
 
 def parse_rest_code_block(block, m: Match, state: BlockState):
     """Parse RST code block (::)"""
-    token = {"type": "rest_code_block", "text": ""}
+    token = {"type": "rest_code_block", "raw": ""}
     state.append_token(token)
     return m.end()
 

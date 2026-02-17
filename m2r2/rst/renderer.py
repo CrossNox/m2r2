@@ -68,12 +68,15 @@ class RestRenderer(RSTRenderer):
                             yield "\n"
             pending_blank_lines = 0
 
+            # Maintain parent's contract: each token carries a reference
+            # to the previous non-blank token.  The parent's block_quote()
+            # (and potentially future methods) relies on token["prev"].
+            tok["prev"] = prev_tok
             prev_tok = tok
             yield self.render_token(tok, state)
 
     def __call__(self, tokens, state):
         """Override to avoid stripping trailing newlines."""
-        state.env["inline_images"] = []
         return self.render_tokens(tokens, state)
 
     def thematic_break(self, token, state):
@@ -206,20 +209,18 @@ class RestRenderer(RSTRenderer):
         if url_info.scheme:
             return f"`{text} <{link}>`{underscore}"
 
-        link_type = "doc"
-        anchor = url_info.fragment
+        if url_info.path and url_info.fragment:
+            # :doc: cannot link to a specific anchor in another file.
+            # Fall back to a regular link so the fragment is not lost.
+            return f"`{text} <{link}>`{underscore}"
+
         if url_info.fragment:
-            if url_info.path:
-                # Can't link to anchors via doc directive.
-                anchor = ""
-            else:
-                # Example: [text](#anchor)
-                link_type = "ref"
-        doc_link = f"{os.path.splitext(url_info.path)[0]}{anchor}"
-        # splitext approach works whether or not path is set. It
-        # will return an empty string if unset, which leads to
-        # anchor only ref.
-        return f":{link_type}:`{text} <{doc_link}>`"
+            # Anchor-only link, e.g. [text](#anchor)
+            return f":ref:`{text} <{url_info.fragment}>`"
+
+        # Document link, e.g. [text](page.md)
+        doc_link = os.path.splitext(url_info.path)[0]
+        return f":doc:`{text} <{doc_link}>`"
 
     def heading(self, token, state):
         """Override to fix heading underlines for multibyte characters"""
