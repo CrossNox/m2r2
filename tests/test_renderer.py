@@ -100,9 +100,7 @@ class TestInlineMarkdown(RendererTestBase):
     def test_strikethrough(self):
         src = "~~a~~"
         out = self.conv(src)
-        self.assertIn(":raw-html-m2r:", out)
-        self.assertIn("<del>", out)
-        self.assertIn("</del>", out)
+        self.assertIn(":raw-html-m2r:`<del>a</del>`", out)
 
     def test_emphasis(self):
         src = "*a*"
@@ -172,9 +170,14 @@ class TestInlineMarkdown(RendererTestBase):
         self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
 
     def test_relative_link_with_anchor(self):
+        """Links with both path and fragment fall back to regular links
+        because :doc: cannot target a specific anchor."""
         src = "this is a [relative link](a_file.md#anchor)."
         out = self.conv_no_check(src, parse_relative_links=True)
-        self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
+        self.assertEqual(
+            out,
+            "\nthis is a `relative link <a_file.md#anchor>`_.\n",
+        )
 
     def test_link_title(self):
         src = 'this is a [link](http://example.com/ "example").'
@@ -896,3 +899,48 @@ class TestRawHtmlProlog(RendererTestBase):
         self.assertIn("raw-html-m2r", out1)
         out2 = converter("plain text")
         self.assertNotIn("raw-html-m2r", out2)
+
+
+class TestEdgeCases(RendererTestBase):
+    def test_empty_input(self):
+        out = self.conv("")
+        # Should produce minimal output without errors
+        self.assertEqual(out.strip(), "")
+
+    def test_whitespace_only_input(self):
+        out = self.conv("\n")
+        self.assertEqual(out.strip(), "")
+
+    def test_whitespace_multiple_newlines(self):
+        out = self.conv("\n\n\n")
+        self.assertEqual(out.strip(), "")
+
+
+class TestInstanceReuse(RendererTestBase):
+    """Verify that converting multiple documents via a single M2R2 instance
+    does not leak state between calls."""
+
+    def test_list_state_does_not_leak(self):
+        converter = M2R2()
+        out1 = converter("* item a\n* item b\n")
+        self.assertIn("* item a", out1)
+        out2 = converter("plain paragraph\n")
+        # The second document should be a plain paragraph with no list markers
+        self.assertNotIn("*", out2.strip())
+        self.assertIn("plain paragraph", out2)
+
+    def test_table_then_paragraph(self):
+        converter = M2R2()
+        out1 = converter("h1 | h2\n--- | ---\n1 | 2\n")
+        self.assertIn("list-table", out1)
+        out2 = converter("just text\n")
+        self.assertNotIn("list-table", out2)
+        self.assertIn("just text", out2)
+
+    def test_footnote_then_plain(self):
+        converter = M2R2()
+        out1 = converter("Text[^1].\n\n[^1]: note\n")
+        self.assertIn("[#fn-1]", out1)
+        out2 = converter("no footnotes here\n")
+        self.assertNotIn("[#fn", out2)
+        self.assertIn("no footnotes here", out2)

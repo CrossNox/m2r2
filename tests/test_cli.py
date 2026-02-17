@@ -2,6 +2,8 @@
 
 import subprocess
 import sys
+import tempfile
+from io import StringIO
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
@@ -14,14 +16,19 @@ test_rst = curdir / "test.rst"
 
 
 class TestConvert(TestCase):
-    def setUp(self):
-        self._orig_rst = test_rst.read_text() if test_rst.exists() else None
+    """CLI conversion tests.
 
-    def tearDown(self):
-        if self._orig_rst is not None:
-            test_rst.write_text(self._orig_rst)
-        elif test_rst.exists():
-            test_rst.unlink()
+    Tests that write files use a temporary directory so the real
+    ``tests/test.rst`` fixture is never mutated.
+    """
+
+    def _copy_to_tmp(self, tmpdir: Path) -> tuple[Path, Path]:
+        """Copy test.md into *tmpdir* and return (md_path, expected_rst_path)."""
+        md = tmpdir / "test.md"
+        md.write_text(test_md.read_text())
+        return md, tmpdir / "test.rst"
+
+    # -- argument handling ---------------------------------------------------
 
     def test_no_file(self):
         p = subprocess.Popen(
@@ -36,90 +43,165 @@ class TestConvert(TestCase):
         self.assertIn("usage", message)
         self.assertIn("required: FILE", message)
 
+    def test_missing_file_via_main(self):
+        """Missing files are reported to stderr and cause exit code 1."""
+        with self.assertRaises(SystemExit) as ctx:
+            main(["nonexistent.md"])
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_missing_file_via_parse_from_file(self):
+        with self.assertRaises(FileNotFoundError):
+            parse_from_file("nonexistent.md")
+
+    def test_missing_files_all_reported(self):
+        """All missing files are reported before exiting."""
+        stderr = StringIO()
+        with (
+            patch("sys.stderr", stderr),
+            self.assertRaises(SystemExit),
+        ):
+            main(["missing_a.md", "missing_b.md"])
+        output = stderr.getvalue()
+        self.assertIn("missing_a.md", output)
+        self.assertIn("missing_b.md", output)
+
+    # -- conversion ----------------------------------------------------------
+
     def test_parse_file(self):
         output = parse_from_file(test_md)
         expected = test_rst.read_text()
         self.assertEqual(output.strip(), expected.strip())
 
     def test_dryrun(self):
-        rst = test_rst.read_text()
-        test_rst.unlink()
-        self.assertFalse(test_rst.exists())
-        with patch("builtins.print") as m:
-            main(["--dry-run", str(test_md)])
-        self.assertFalse(test_rst.exists())
-        m.assert_called_once_with(rst)
+        """--dry-run prints to stdout and does not write a file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            self.assertFalse(rst.exists())
+            stdout = StringIO()
+            with patch("sys.stdout", stdout):
+                main(["--dry-run", str(md)])
+            self.assertFalse(rst.exists())
+            expected = test_rst.read_text()
+            # --dry-run adds a trailing newline via print()
+            self.assertEqual(stdout.getvalue().strip(), expected.strip())
 
     def test_write_file(self):
-        test_rst.unlink()
-        self.assertFalse(test_rst.exists())
-        main([str(test_md)])
-        self.assertTrue(test_rst.exists())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            self.assertFalse(rst.exists())
+            main([str(md)])
+            self.assertTrue(rst.exists())
 
     def test_overwrite_file(self):
-        test_rst.write_text("test")
-        first_line = test_rst.read_text().splitlines()[0]
-        self.assertIn("test", first_line)
-        with (
-            patch("sys.stdin") as mock_stdin,
-            patch("builtins.input", return_value="y"),
-        ):
-            mock_stdin.isatty.return_value = True
-            main([str(test_md)])
-        self.assertTrue(test_rst.exists())
-        first_line = test_rst.read_text().splitlines()[0]
-        self.assertNotIn("test", first_line)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            rst.write_text("test")
+            with (
+                patch("sys.stdin") as mock_stdin,
+                patch("builtins.input", return_value="y"),
+            ):
+                mock_stdin.isatty.return_value = True
+                main([str(md)])
+            self.assertTrue(rst.exists())
+            first_line = rst.read_text().splitlines()[0]
+            self.assertNotIn("test", first_line)
 
     def test_overwrite_option(self):
-        test_rst.write_text("test")
-        first_line = test_rst.read_text().splitlines()[0]
-        self.assertIn("test", first_line)
-        with patch("builtins.input", return_value="y") as m_input:
-            with patch("builtins.print") as m_print:
-                main(["--overwrite", str(test_md)])
-        self.assertTrue(test_rst.exists())
-        self.assertFalse(m_input.called)
-        self.assertFalse(m_print.called)
-        first_line = test_rst.read_text().splitlines()[0]
-        self.assertNotIn("test", first_line)
-
-    def test_underscore_option(self):
-        with patch("builtins.print") as m:
-            main(["--no-underscore-emphasis", "--dry-run", str(test_md)])
-        self.assertIn("__content__", m.call_args[0][0])
-        self.assertNotIn("**content**", m.call_args[0][0])
-
-    def test_anonymous_reference_option(self):
-        with patch("builtins.print") as m:
-            main(["--anonymous-references", "--dry-run", str(test_md)])
-        self.assertIn("`A link to GitHub <http://github.com/>`__", m.call_args[0][0])
-
-    def test_disable_inline_math(self):
-        with patch("builtins.print") as m:
-            main(["--disable-inline-math", "--dry-run", str(test_md)])
-        self.assertIn("``$E = mc^2$``", m.call_args[0][0])
-        self.assertNotIn(":math:", m.call_args[0][0])
-
-    def test_missing_file(self):
-        with self.assertRaises(FileNotFoundError):
-            parse_from_file("nonexistent.md")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            rst.write_text("test")
+            with patch("builtins.input", return_value="y") as m_input:
+                main(["--overwrite", str(md)])
+            self.assertTrue(rst.exists())
+            self.assertFalse(m_input.called)
+            first_line = rst.read_text().splitlines()[0]
+            self.assertNotIn("test", first_line)
 
     def test_decline_overwrite(self):
-        test_rst.write_text("original")
-        with (
-            patch("sys.stdin") as mock_stdin,
-            patch("builtins.input", return_value="n"),
-            patch("builtins.print") as m_print,
-        ):
-            mock_stdin.isatty.return_value = True
-            main([str(test_md)])
-        self.assertEqual(test_rst.read_text(), "original")
-        m_print.assert_called_once_with(f"Skipping {test_md}")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            rst.write_text("original")
+            stderr = StringIO()
+            with (
+                patch("sys.stdin") as mock_stdin,
+                patch("builtins.input", return_value="n"),
+                patch("sys.stderr", stderr),
+            ):
+                mock_stdin.isatty.return_value = True
+                main([str(md)])
+            self.assertEqual(rst.read_text(), "original")
+            self.assertIn("Skipping", stderr.getvalue())
+
+    def test_non_interactive_skip(self):
+        """Non-interactive mode skips with a warning to stderr."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md, rst = self._copy_to_tmp(Path(tmpdir))
+            rst.write_text("original")
+            stderr = StringIO()
+            with (
+                patch("sys.stdin") as mock_stdin,
+                patch("sys.stderr", stderr),
+            ):
+                mock_stdin.isatty.return_value = False
+                main([str(md)])
+            self.assertEqual(rst.read_text(), "original")
+            self.assertIn("--overwrite", stderr.getvalue())
+
+    # -- option flags --------------------------------------------------------
+
+    def test_underscore_option(self):
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            main(["--no-underscore-emphasis", "--dry-run", str(test_md)])
+        output = stdout.getvalue()
+        self.assertIn("__content__", output)
+        self.assertNotIn("**content**", output)
+
+    def test_anonymous_reference_option(self):
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            main(["--anonymous-references", "--dry-run", str(test_md)])
+        self.assertIn("`A link to GitHub <http://github.com/>`__", stdout.getvalue())
+
+    def test_disable_inline_math(self):
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            main(["--disable-inline-math", "--dry-run", str(test_md)])
+        output = stdout.getvalue()
+        self.assertIn("``$E = mc^2$``", output)
+        self.assertNotIn(":math:", output)
+
+    def test_parse_relative_links_option(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md = Path(tmpdir) / "rel.md"
+            md.write_text("See [other page](other.md).\n")
+            stdout = StringIO()
+            with patch("sys.stdout", stdout):
+                main(["--parse-relative-links", "--dry-run", str(md)])
+            self.assertIn(":doc:`other page <other>`", stdout.getvalue())
+
+    def test_use_mermaid_option(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md = Path(tmpdir) / "merm.md"
+            md.write_text("```mermaid\ngraph TD\n    A --> B\n```\n")
+            stdout = StringIO()
+            with patch("sys.stdout", stdout):
+                main(["--use-mermaid", "--dry-run", str(md)])
+            self.assertIn(".. mermaid::", stdout.getvalue())
+
+    def test_version_flag(self):
+        p = subprocess.run(
+            [sys.executable, "-m", "m2r2", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(p.returncode, 0)
+        self.assertRegex(p.stdout.strip(), r"m2r2 \d+\.\d+")
+
+    # -- multiple files ------------------------------------------------------
 
     def test_multiple_input_files(self):
         """Passing multiple files should convert each one."""
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmpdir:
             tmppath = Path(tmpdir)
             md1 = tmppath / "a.md"
@@ -135,6 +217,8 @@ class TestConvert(TestCase):
             self.assertTrue(rst2.exists())
             self.assertIn("File A", rst1.read_text())
             self.assertIn("File B", rst2.read_text())
+
+    # -- subprocess integration ----------------------------------------------
 
     def test_subprocess_convert(self):
         """Integration test: convert a file via ``python -m m2r2 --dry-run``."""
