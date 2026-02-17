@@ -12,8 +12,8 @@ extensions = [
 
 suppress_warnings = ["image.nonlocal_uri"]
 templates_path = ["_templates"]
-source_suffix = ".md"
-master_doc = "index"
+source_suffix = [".rst", ".md"]
+root_doc = "index"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- m2r2 configuration --------------------------------------------------
@@ -26,7 +26,7 @@ m2r_disable_inline_math = False
 # -- Project information --------------------------------------------------
 
 project = "M2R2"
-copyright = "2025, CrossNox"
+copyright = "2026, CrossNox"
 author = "CrossNox"
 version = __m2r2_version__
 release = __m2r2_version__
@@ -56,5 +56,5 @@ html_sidebars = {
         "searchbox.html",
     ]
 }
-htmlhelp_basename = "M2Rdoc"
+htmlhelp_basename = "M2R2doc"
 pygments_style = "sphinx"

@@ -90,7 +90,7 @@ print(rst)
 Or, use `parse_from_file` function to load a markdown file and obtain converted text.
 
 ```python
-from m2r2.cli import parse_from_file
+from m2r2 import parse_from_file
 
 output = parse_from_file('markdown_file.md')
 ```
