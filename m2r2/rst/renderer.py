@@ -72,17 +72,9 @@ class RestRenderer(RSTRenderer):
             yield self.render_token(tok, state)
 
     def __call__(self, tokens, state):
-        """Override to avoid stripping trailing newlines"""
+        """Override to avoid stripping trailing newlines."""
         state.env["inline_images"] = []
-        out = self.render_tokens(tokens, state)
-        # Handle inline image references
-        refs = list(self.render_referrences(state))
-        if refs:
-            out += "\n\n".join(refs) + "\n"
-        return out
-
-    def finalize(self, data):
-        return "".join(x for x in data if x is not None)
+        return self.render_tokens(tokens, state)
 
     def thematic_break(self, token, state):
         """Override to use shorter horizontal rule"""
@@ -93,10 +85,13 @@ class RestRenderer(RSTRenderer):
         return "\\ :raw-html-m2r:`<br>`\n"
 
     def paragraph(self, token, state):
-        """Override to preserve line breaks in paragraphs"""
+        """Override to preserve line breaks in paragraphs.
+
+        Block-level elements (images, image links) handle their own spacing
+        and should not be wrapped with extra newlines.
+        """
         text = self.render_children(token, state)
-        # Check if this paragraph only contains block-level elements that handle their own spacing
-        if text.strip().startswith("\n\n") or text.startswith("\n\n.. image::"):
+        if text.startswith("\n\n.. image::"):
             return text
         return f"\n{text}\n"
 
@@ -110,14 +105,17 @@ class RestRenderer(RSTRenderer):
         )
 
     def _raw_html(self, html):
+        # Escape backticks to prevent breaking the RST role syntax
+        html = html.replace("`", "&#96;")
         return rf"\ :raw-html-m2r:`{html}`\ "
 
     def block_code(self, token: dict[str, Any], state: BlockState):
         # Extract code content from token
         code_text = token.get("raw", "")
 
-        # Extract language info from token attributes
-        lang = token.get("attrs", {}).get("info", "") if "attrs" in token else ""
+        # Extract language from the info string (first word only, e.g. "python title=x" -> "python")
+        info = token.get("attrs", {}).get("info", "") if "attrs" in token else ""
+        lang = info.split()[0] if info else ""
 
         if lang == "math":
             first_line = "\n.. math::\n\n"
@@ -300,9 +298,12 @@ class RestRenderer(RSTRenderer):
         if "``" not in code:
             return rf"\ ``{code}``\ "
         else:
-            # Use raw HTML for code with backticks
+            # Use raw HTML for code with backticks.
+            # Backticks in the code are already escaped by _raw_html(),
+            # but we also escape them in the visible <span> content for
+            # correct HTML rendering.
             return self._raw_html(
-                f'<code class="docutils literal">'
+                '<code class="docutils literal">'
                 f'<span class="pre">{code.replace("`", "&#96;")}</span>'
                 "</code>"
             )
@@ -359,17 +360,18 @@ class RestRenderer(RSTRenderer):
         state.env["list_indent"] = current_indent + " " * marker_width
 
         # Process list items
-        items = []
-        for i, item_token in enumerate(token["children"]):
-            if item_token["type"] == "list_item":
-                is_last_item = i == len(token["children"]) - 1
-                item_content = self._render_list_item(
-                    item_token, state, ordered, current_indent, tight, is_last_item
-                )
-                items.append(item_content)
-
-        state.env["list_depth"] -= 1
-        state.env["list_indent"] = current_indent
+        try:
+            items = []
+            for i, item_token in enumerate(token["children"]):
+                if item_token["type"] == "list_item":
+                    is_last_item = i == len(token["children"]) - 1
+                    item_content = self._render_list_item(
+                        item_token, state, ordered, current_indent, tight, is_last_item
+                    )
+                    items.append(item_content)
+        finally:
+            state.env["list_depth"] -= 1
+            state.env["list_indent"] = current_indent
 
         # Join items
         result = "".join(items)
@@ -464,7 +466,12 @@ class RestRenderer(RSTRenderer):
         return result
 
     def table_head(self, token, state):
-        """Render table header"""
+        """Render table header.
+
+        Note: the body of this method is identical to table_row(). They are
+        kept separate because they handle semantically different token types
+        (table_head children are cells directly, table_body wraps rows).
+        """
         cells = token.get("children", [])
         if not cells:
             return ""
@@ -492,17 +499,13 @@ class RestRenderer(RSTRenderer):
             result += "     - " + self.render_children(cell, state).strip() + "\n"
         return result
 
-    def table_cell(self, token, state):
-        """Render table cell"""
-        return self.render_children(token, state)
-
     # Footnote rendering methods
     def footnote_ref(self, token, state):
         """Render footnote reference"""
         # Key can be in attrs or directly in raw
         attrs = token.get("attrs", {})
         key = token.get("raw", attrs.get("key", str(attrs.get("index", ""))))
-        # Use lowercase for consistency with original m2r behavior
+        # Normalize to lowercase: mistune v3 uppercases footnote keys internally
         key = key.lower()
         return rf"\ [#fn-{key}]_\ "
 
@@ -510,7 +513,7 @@ class RestRenderer(RSTRenderer):
         """Render footnote item"""
         attrs = token.get("attrs", {})
         key = attrs.get("key", str(attrs.get("index", "")))
-        # Use lowercase for consistency with original m2r behavior
+        # Normalize to lowercase: mistune v3 uppercases footnote keys internally
         key = key.lower()
         content = self.render_children(token, state).strip()
         return f".. [#fn-{key}] {content}\n"
