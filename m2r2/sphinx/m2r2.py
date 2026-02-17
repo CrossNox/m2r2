@@ -6,7 +6,11 @@ from m2r2.sphinx.directives import MdInclude
 
 
 def _migrate_deprecated_config(app, config):
-    """Copy deprecated ``no_underscore_emphasis`` to ``m2r_no_underscore_emphasis``."""
+    """Copy deprecated ``no_underscore_emphasis`` to ``m2r_no_underscore_emphasis``.
+
+    If the user explicitly set the new config name, it takes precedence
+    over the deprecated one.
+    """
     if config.no_underscore_emphasis:
         warnings.warn(
             "The 'no_underscore_emphasis' config value is deprecated. "
@@ -14,7 +18,9 @@ def _migrate_deprecated_config(app, config):
             DeprecationWarning,
             stacklevel=1,
         )
-        config.m2r_no_underscore_emphasis = config.no_underscore_emphasis
+        # Only migrate if the new config is still at its default value
+        if not config.m2r_no_underscore_emphasis:
+            config.m2r_no_underscore_emphasis = config.no_underscore_emphasis
 
 
 def setup(app):

@@ -75,11 +75,14 @@ def save_to_file(
 
     if not overwrite and target.exists():
         if not sys.stdin.isatty():
-            print(f"Skipping {file} (use --overwrite in non-interactive mode)")
+            print(
+                f"Skipping {file} (use --overwrite in non-interactive mode)",
+                file=sys.stderr,
+            )
             return False
         confirm = input(f"{target} already exists. Overwrite it? [y/N]: ").lower()
         if confirm not in ("y", "yes"):
-            print(f"Skipping {file}")
+            print(f"Skipping {file}", file=sys.stderr)
             return False
 
     target.write_text(content, encoding=encoding)
@@ -148,19 +151,22 @@ def run_m2r2(args: argparse.Namespace) -> None:
     Args:
         args: Parsed command-line arguments.
     """
+    # Validate all input files exist before processing any
+    missing = [f for f in args.input_files if not f.exists()]
+    if missing:
+        for f in missing:
+            print(f"Error: No such file exists: {f}", file=sys.stderr)
+        sys.exit(1)
+
     for file in args.input_files:
-        try:
-            output = parse_from_file(
-                file,
-                no_underscore_emphasis=args.no_underscore_emphasis,
-                parse_relative_links=args.parse_relative_links,
-                anonymous_references=args.anonymous_references,
-                disable_inline_math=args.disable_inline_math,
-                use_mermaid=args.use_mermaid,
-            )
-        except (FileNotFoundError, OSError) as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+        output = parse_from_file(
+            file,
+            no_underscore_emphasis=args.no_underscore_emphasis,
+            parse_relative_links=args.parse_relative_links,
+            anonymous_references=args.anonymous_references,
+            disable_inline_math=args.disable_inline_math,
+            use_mermaid=args.use_mermaid,
+        )
         if args.dry_run:
             print(output)
         else:
