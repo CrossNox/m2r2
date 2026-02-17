@@ -108,10 +108,10 @@ class RestRenderer(RSTRenderer):
             self.indent + line if line else "" for line in block.splitlines()
         )
 
-    def _raw_html(self, html):
+    def _raw_html(self, raw):
         # Escape backticks to prevent breaking the RST role syntax
-        html = html.replace("`", "&#96;")
-        return rf"\ :raw-html-m2r:`{html}`\ "
+        raw = raw.replace("`", "&#96;")
+        return rf"\ :raw-html-m2r:`{raw}`\ "
 
     def block_code(self, token: dict[str, Any], state: BlockState):
         # Extract code content from token
@@ -281,14 +281,14 @@ class RestRenderer(RSTRenderer):
 
     def block_html(self, token, state):
         """Render block HTML as raw HTML directive"""
-        html = token.get("raw", "").rstrip("\n")
-        indented = self._indent_block(html)
+        raw = token.get("raw", "").rstrip("\n")
+        indented = self._indent_block(raw)
         return f"\n\n.. raw:: html\n\n{indented}\n\n"
 
     def inline_html(self, token, state):
         """Render inline HTML as raw HTML role"""
-        html = token.get("raw", "")
-        return self._raw_html(html)
+        raw = token.get("raw", "")
+        return self._raw_html(raw)
 
     def codespan(self, token, state):
         """Render inline code span.
@@ -467,13 +467,8 @@ class RestRenderer(RSTRenderer):
         result += "\n"
         return result
 
-    def table_head(self, token, state):
-        """Render table header.
-
-        Note: the body of this method is identical to table_row(). They are
-        kept separate because they handle semantically different token types
-        (table_head children are cells directly, table_body wraps rows).
-        """
+    def _table_row_head_helper(self, token, state):
+        """Helper method for table_head and table_row."""
         cells = token.get("children", [])
         if not cells:
             return ""
@@ -482,6 +477,10 @@ class RestRenderer(RSTRenderer):
         for cell in cells[1:]:
             result += "     - " + self.render_children(cell, state).strip() + "\n"
         return result
+
+    def table_head(self, token, state):
+        """Render table header."""
+        return self._table_row_head_helper(token, state)
 
     def table_body(self, token, state):
         """Render table body"""
@@ -492,14 +491,7 @@ class RestRenderer(RSTRenderer):
 
     def table_row(self, token, state):
         """Render table row"""
-        cells = token.get("children", [])
-        if not cells:
-            return ""
-
-        result = "   * - " + self.render_children(cells[0], state).strip() + "\n"
-        for cell in cells[1:]:
-            result += "     - " + self.render_children(cell, state).strip() + "\n"
-        return result
+        return self._table_row_head_helper(token, state)
 
     # Footnote rendering methods
     def footnote_ref(self, token, state):

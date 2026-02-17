@@ -28,7 +28,7 @@ REST_CODE_BLOCK_PATTERN = r"^(?P<code_block>::\s*)$"
 # Custom list pattern that allows any indentation for visual nesting
 VISUAL_LIST_PATTERN = (
     r"^(?P<visual_list_spaces> *)"  # Allow any number of leading spaces
-    r"(?P<visual_list_marker>[\*\+-]|\d{1,9}[.)])"
+    r"(?P<visual_list_marker>[*+\-]|\d{1,9}[.)])"
     r"(?P<visual_list_content>[ \t]*|[ \t].+)$"
 )
 
