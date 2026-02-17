@@ -212,16 +212,13 @@ class RestRenderer(RSTRenderer):
         if url_info.scheme:
             return f"`{text} <{link}>`{underscore}"
 
-        if url_info.path and url_info.fragment:
-            # :doc: cannot link to a specific anchor in another file.
-            # Fall back to a regular link so the fragment is not lost.
-            return f"`{text} <{link}>`{underscore}"
-
-        if url_info.fragment:
+        if url_info.fragment and not url_info.path:
             # Anchor-only link, e.g. [text](#anchor)
             return f":ref:`{text} <{url_info.fragment}>`"
 
-        # Document link, e.g. [text](page.md)
+        # Document link, e.g. [text](page.md) or [text](page.md#anchor).
+        # The :doc: directive does not support anchors, so the fragment
+        # is intentionally discarded — matching the original m2r behavior.
         doc_link = os.path.splitext(url_info.path)[0]
         return f":doc:`{text} <{doc_link}>`"
 

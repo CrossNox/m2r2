@@ -170,14 +170,10 @@ class TestInlineMarkdown(RendererTestBase):
         self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
 
     def test_relative_link_with_anchor(self):
-        """Links with both path and fragment fall back to regular links
-        because :doc: cannot target a specific anchor."""
+        """Anchor is discarded because :doc: cannot target a specific anchor."""
         src = "this is a [relative link](a_file.md#anchor)."
         out = self.conv_no_check(src, parse_relative_links=True)
-        self.assertEqual(
-            out,
-            "\nthis is a `relative link <a_file.md#anchor>`_.\n",
-        )
+        self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
 
     def test_link_title(self):
         src = 'this is a [link](http://example.com/ "example").'
