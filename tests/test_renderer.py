@@ -285,10 +285,50 @@ class TestInlineMarkdown(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(out, PROLOG + "\nthis is :raw-html-m2r:`<s>html</s>`.\n")
 
+    def test_inline_html_with_backtick(self):
+        """Backticks in inline HTML must be escaped to avoid breaking RST role syntax."""
+        src = 'text <span title="a`b">hello</span> text'
+        out = self.conv(src)
+        self.assertIn(":raw-html-m2r:", out)
+        # Backtick must be escaped as &#96;
+        self.assertNotIn("`a`", out.split(":raw-html-m2r:")[1].split("`")[0])
+        self.assertIn("&#96;", out)
+
     def test_block_html(self):
         src = "<h1>title</h1>"
         out = self.conv(src)
         self.assertEqual(out, "\n\n.. raw:: html\n\n   <h1>title</h1>\n\n")
+
+
+class TestNoUnderscoreEmphasis(RendererTestBase):
+    """Regression tests for no_underscore_emphasis with asterisks."""
+
+    def test_asterisk_emphasis(self):
+        src = "*hello*"
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertEqual(out.replace("\n", ""), "*hello*")
+
+    def test_asterisk_strong(self):
+        src = "**hello**"
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertEqual(out.replace("\n", ""), "**hello**")
+
+    def test_underscore_emphasis_passthrough(self):
+        src = "_hello_"
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertEqual(out.replace("\n", ""), "_hello_")
+
+    def test_underscore_strong_passthrough(self):
+        src = "__hello__"
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertEqual(out.replace("\n", ""), "__hello__")
+
+    def test_mixed_emphasis_in_sentence(self):
+        src = "This has *emphasis* and _underscored_ text."
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("*emphasis*", out)
+        self.assertIn("_underscored_", out)
+        self.assertNotIn("*underscored*", out)
 
 
 class TestBlockQuote(RendererTestBase):
@@ -367,6 +407,15 @@ def a(i):
             "\n.. code-block:: python\n\n   def a(i):\n       print(i)\n",
         )
 
+    def test_code_block_info_string_extra_text(self):
+        """Info string with extra metadata should use only the language name."""
+        src = """\
+```python title=test
+print(1)
+```"""
+        out = self.conv(src)
+        self.assertEqual(out, "\n.. code-block:: python\n\n   print(1)\n")
+
 
 class TestImage(RendererTestBase):
     def test_image(self):
@@ -380,8 +429,10 @@ class TestImage(RendererTestBase):
 
     def test_image_title(self):
         src = '![alt text](a.png "title")'
-        self.conv(src)
-        # title is not supported now
+        out = self.conv(src)
+        # title is not supported by RST image directive, but image should still render
+        self.assertIn(".. image:: a.png", out)
+        self.assertIn(":alt: alt text", out)
 
 
 class TestHeading(RendererTestBase):
@@ -394,6 +445,31 @@ class TestHeading(RendererTestBase):
         src = "# マルチバイト文字\n"
         out = self.conv(src)
         self.assertEqual(out, "\nマルチバイト文字\n" + "=" * 16 + "\n")
+
+    def test_heading_level_2(self):
+        src = "## head 2"
+        out = self.conv(src)
+        self.assertEqual(out, "\nhead 2\n" + "-" * 6 + "\n")
+
+    def test_heading_level_3(self):
+        src = "### head 3"
+        out = self.conv(src)
+        self.assertEqual(out, "\nhead 3\n" + "^" * 6 + "\n")
+
+    def test_heading_level_4(self):
+        src = "#### head 4"
+        out = self.conv(src)
+        self.assertEqual(out, "\nhead 4\n" + "~" * 6 + "\n")
+
+    def test_heading_level_5(self):
+        src = "##### head 5"
+        out = self.conv(src)
+        self.assertEqual(out, "\nhead 5\n" + '"' * 6 + "\n")
+
+    def test_heading_level_6(self):
+        src = "###### head 6"
+        out = self.conv(src)
+        self.assertEqual(out, "\nhead 6\n" + "#" * 6 + "\n")
 
 
 class TestList(RendererTestBase):
@@ -658,7 +734,12 @@ print(1)
 ---
 end
 """
-        self.conv(src)
+        out = self.conv(src)
+        self.assertIn(".. code-block:: python", out)
+        self.assertIn("print(1)", out)
+        self.assertIn("title\n=====", out)
+        self.assertIn("----", out)
+        self.assertIn("end", out)
 
 
 class TestTable(RendererTestBase):
@@ -707,6 +788,17 @@ This is a\\ [#fn-1]_ footnote\\ [#fn-2]_ ref\\ [#fn-ref]_ with rst [#a]_.
 .. [#fn-ref] note ref
 """
         self.assertEqual(out, expected)
+
+    def test_footnote_mixed_case(self):
+        """Footnote references with mixed case should be normalized to lowercase."""
+        src = """\
+This has a[^MyRef] footnote.
+
+[^MyRef]: mixed case note"""
+        out = self.conv(src)
+        # Both the reference and definition should use lowercase
+        self.assertIn("[#fn-myref]_", out)
+        self.assertIn(".. [#fn-myref]", out)
 
     def test_sphinx_ref(self):
         src = "This is a sphinx [ref]_ global ref.\n\n.. [ref] ref text"
