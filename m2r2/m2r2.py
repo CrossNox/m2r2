@@ -68,6 +68,8 @@ class M2R2:
 
         if plugins is None:
             plugins = []
+        else:
+            plugins = list(plugins)
 
         # Create custom plugin function that respects options
         def custom_rst_directives(md):
