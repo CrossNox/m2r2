@@ -60,7 +60,11 @@ class TestConvert(TestCase):
         test_rst.write_text("test")
         first_line = test_rst.read_text().splitlines()[0]
         self.assertIn("test", first_line)
-        with patch("builtins.input", return_value="y"):
+        with (
+            patch("sys.stdin") as mock_stdin,
+            patch("builtins.input", return_value="y"),
+        ):
+            mock_stdin.isatty.return_value = True
             main([str(test_md)])
         self.assertTrue(test_rst.exists())
         first_line = test_rst.read_text().splitlines()[0]
@@ -102,11 +106,35 @@ class TestConvert(TestCase):
 
     def test_decline_overwrite(self):
         test_rst.write_text("original")
-        with patch("builtins.input", return_value="n"):
-            with patch("builtins.print") as m_print:
-                main([str(test_md)])
+        with (
+            patch("sys.stdin") as mock_stdin,
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print") as m_print,
+        ):
+            mock_stdin.isatty.return_value = True
+            main([str(test_md)])
         self.assertEqual(test_rst.read_text(), "original")
         m_print.assert_called_once_with(f"Skipping {test_md}")
+
+    def test_multiple_input_files(self):
+        """Passing multiple files should convert each one."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            md1 = tmppath / "a.md"
+            md2 = tmppath / "b.md"
+            md1.write_text("# File A\n")
+            md2.write_text("# File B\n")
+
+            main([str(md1), str(md2)])
+
+            rst1 = tmppath / "a.rst"
+            rst2 = tmppath / "b.rst"
+            self.assertTrue(rst1.exists())
+            self.assertTrue(rst2.exists())
+            self.assertIn("File A", rst1.read_text())
+            self.assertIn("File B", rst2.read_text())
 
     def test_subprocess_convert(self):
         """Integration test: convert a file via ``python -m m2r2 --dry-run``."""

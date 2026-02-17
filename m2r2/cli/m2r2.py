@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from m2r2.m2r2 import convert
+from m2r2.m2r2 import __version__, convert
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -73,6 +74,9 @@ def save_to_file(
     target = Path(file).with_suffix(".rst")
 
     if not overwrite and target.exists():
+        if not sys.stdin.isatty():
+            print(f"Skipping {file} (use --overwrite in non-interactive mode)")
+            return False
         confirm = input(f"{target} already exists. Overwrite it? [y/N]: ").lower()
         if confirm not in ("y", "yes"):
             print(f"Skipping {file}")
@@ -87,6 +91,11 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="m2r2",
         description="Convert Markdown to reStructuredText.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "input_files",
@@ -125,6 +134,11 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="disable inline math conversion",
     )
+    parser.add_argument(
+        "--use-mermaid",
+        action="store_true",
+        help="render mermaid code blocks as .. mermaid:: directives",
+    )
     return parser
 
 
@@ -135,13 +149,18 @@ def run_m2r2(args: argparse.Namespace) -> None:
         args: Parsed command-line arguments.
     """
     for file in args.input_files:
-        output = parse_from_file(
-            file,
-            no_underscore_emphasis=args.no_underscore_emphasis,
-            parse_relative_links=args.parse_relative_links,
-            anonymous_references=args.anonymous_references,
-            disable_inline_math=args.disable_inline_math,
-        )
+        try:
+            output = parse_from_file(
+                file,
+                no_underscore_emphasis=args.no_underscore_emphasis,
+                parse_relative_links=args.parse_relative_links,
+                anonymous_references=args.anonymous_references,
+                disable_inline_math=args.disable_inline_math,
+                use_mermaid=args.use_mermaid,
+            )
+        except (FileNotFoundError, OSError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
         if args.dry_run:
             print(output)
         else:
