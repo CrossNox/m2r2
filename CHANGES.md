@@ -1,7 +1,7 @@
 ### Version 1.0.0 (2026-02-11)
 * Drop support for Python < 3.9
 * Upgrade to mistune 3.0+
-* Upgrade to docutils 0.21.2+
+* Upgrade to docutils 0.19+
 * **Breaking**: Rename Sphinx config `no_underscore_emphasis` to `m2r_no_underscore_emphasis` for consistency with other `m2r_` prefixed options
 
 ### Version 0.3.4 (2025-05-01)

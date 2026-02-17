@@ -77,12 +77,12 @@ uv run sphinx-build -E -W -n -j auto -b html docs docs/_build/html
 
 ```
 m2r2/
-├── __init__.py          # Exports M2R2, convert, setup
+├── __init__.py          # Exports M2R2, convert, parse_from_file, __version__, setup
 ├── m2r2.py              # Core M2R2 converter class
 ├── parser.py            # M2R2Parser (docutils RST parser subclass)
 ├── cli/                 # CLI module
-│   ├── __init__.py      # Re-exports parse_from_file
-│   └── m2r2.py          # CLI implementation
+│   ├── __init__.py
+│   └── m2r2.py          # CLI implementation (parse_from_file, main)
 ├── rst/                 # RST rendering components
 │   ├── renderer.py      # Custom RST renderer (RestRenderer)
 │   └── plugins.py       # Mistune plugins (directives, inline math, lists)

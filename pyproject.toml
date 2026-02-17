@@ -81,8 +81,11 @@ known-first-party = ["m2r2"]
 exclude_dirs = ["tests"]
 
 [tool.mypy]
-ignore_missing_imports = true
 python_version = "3.9"
+
+[[tool.mypy.overrides]]
+module = "mistune.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
