@@ -30,12 +30,16 @@ def setup(app):
         "sphinxcontrib.mermaid" in app.config.extensions,
         "env",
     )
-    app.connect("config-inited", _migrate_deprecated_config)
     try:
-        app.add_source_parser(".md", M2R2Parser)  # for older sphinx versions
-    except (TypeError, AttributeError):
+        app.connect("config-inited", _migrate_deprecated_config)
+    except KeyError:
+        # Sphinx < 1.8 doesn't have the config-inited event
+        pass
+    try:
         app.add_source_suffix(".md", "markdown")
         app.add_source_parser(M2R2Parser)
+    except (TypeError, AttributeError):
+        app.add_source_parser(".md", M2R2Parser)  # Sphinx < 4.0
     app.add_directive("mdinclude", MdInclude)
     return {
         "version": __version__,
