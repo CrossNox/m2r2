@@ -1,5 +1,5 @@
 import re
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 import mistune
 from mistune.plugins.footnotes import footnotes
@@ -9,7 +9,10 @@ from mistune.plugins.table import table
 from m2r2.rst.plugins import rst_directives
 from m2r2.rst.renderer import RestRenderer
 
-__version__ = version("m2r2")
+try:
+    __version__ = version("m2r2")
+except PackageNotFoundError:
+    __version__ = "0.0.0.dev0"
 
 # Asterisk-only patterns for no_underscore_emphasis mode.
 # These patterns use named groups so that m.group() works correctly
@@ -39,11 +42,13 @@ PROLOG = """\
 
 """
 
-# Pattern to merge adjacent raw-html-m2r roles
+# Pattern to merge adjacent raw-html-m2r roles on the same line.
 # Matches: :raw-html-m2r:`<tag>`\ text\ :raw-html-m2r:`</tag>`
 # and combines into: :raw-html-m2r:`<tag>text</tag>`
+# The middle group excludes backslashes and newlines to prevent
+# cross-line merges that would consume unrelated RST content.
 _RAW_HTML_MERGE_PATTERN = re.compile(
-    r":raw-html-m2r:`([^`]+)`\\ ([^\\:]+)\\ :raw-html-m2r:`([^`]+)`"
+    r":raw-html-m2r:`([^`]+)`\\ ([^\\\n]+)\\ :raw-html-m2r:`([^`]+)`"
 )
 
 
@@ -111,10 +116,7 @@ class M2R2:
 
     def post_process(self, text):
         # Ensure output starts with exactly one leading newline
-        if not text.startswith("\n"):
-            text = "\n" + text
-        elif text.startswith("\n\n\n"):
-            text = text[1:]
+        text = "\n" + text.lstrip("\n")
 
         # Merge adjacent raw-html-m2r roles that mistune v3 splits across tokens.
         # e.g. :raw-html-m2r:`<s>`\ text\ :raw-html-m2r:`</s>`

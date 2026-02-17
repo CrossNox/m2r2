@@ -1,3 +1,4 @@
+import html
 import os
 from collections.abc import Iterable
 from typing import Any, ClassVar
@@ -90,8 +91,8 @@ class RestRenderer(RSTRenderer):
     def paragraph(self, token, state):
         """Override to preserve line breaks in paragraphs.
 
-        Block-level elements (images, image links) handle their own spacing
-        and should not be wrapped with extra newlines.
+        Block-level elements (image links) handle their own spacing and
+        should not be wrapped with extra newlines.
         """
         text = self.render_children(token, state)
         if text.startswith("\n\n.. image::"):
@@ -200,7 +201,9 @@ class RestRenderer(RSTRenderer):
             underscore = "_"
 
         if title:
-            return self._raw_html(f'<a href="{link}" title="{title}">{text}</a>')
+            return self._raw_html(
+                f'<a href="{html.escape(link)}" title="{html.escape(title)}">{text}</a>'
+            )
 
         if not self.parse_relative_links:
             return f"`{text} <{link}>`{underscore}"
@@ -367,7 +370,7 @@ class RestRenderer(RSTRenderer):
                 if item_token["type"] == "list_item":
                     is_last_item = i == len(token["children"]) - 1
                     item_content = self._render_list_item(
-                        item_token, state, ordered, current_indent, tight, is_last_item
+                        item_token, state, ordered, current_indent, is_last_item
                     )
                     items.append(item_content)
         finally:
@@ -385,9 +388,7 @@ class RestRenderer(RSTRenderer):
 
         return result
 
-    def _render_list_item(
-        self, token, state, ordered, indent, tight, is_last_item=False
-    ):
+    def _render_list_item(self, token, state, ordered, indent, is_last_item=False):
         """Render a single list item"""
         # Choose marker
         if ordered:

@@ -285,7 +285,6 @@ def _build_nested_lists(items: list[dict]) -> list[dict[str, Any]]:
                     "type": "list",
                     "children": [],
                     "tight": True,
-                    "bullet": item["marker"][-1],
                     "attrs": {
                         "ordered": item["ordered"],
                     },
@@ -314,7 +313,6 @@ def _build_nested_lists(items: list[dict]) -> list[dict[str, Any]]:
                     "type": "list",
                     "children": [],
                     "tight": True,
-                    "bullet": item["marker"][-1],
                     "attrs": {
                         "ordered": item["ordered"],
                     },

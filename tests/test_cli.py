@@ -196,7 +196,7 @@ class TestConvert(TestCase):
             text=True,
         )
         self.assertEqual(p.returncode, 0)
-        self.assertRegex(p.stdout.strip(), r"m2r2 \d+\.\d+")
+        self.assertRegex(p.stdout.strip(), r"^m2r2 \d+\.\d+\.\d+")
 
     # -- multiple files ------------------------------------------------------
 

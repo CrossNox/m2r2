@@ -47,7 +47,7 @@ jobs:
         run: uv sync
 
       - name: Build with old sphinx version
-        run: uv run --with "sphinx==1.7.0" --with "alabaster==0.7.13" --with "jinja2==3.0.0" --with "setuptools<71" sphinx-build -W -E -n -b html docs docs/_build/html
+        run: uv run --with "sphinx==1.7.0" --with "alabaster==0.7.13" --with "jinja2==3.0.0" --with "setuptools<71" sphinx-build -W -E -n -j auto -b html docs docs/_build/html
 
   sphinx:
     runs-on: ubuntu-latest
@@ -66,4 +66,4 @@ jobs:
         run: uv sync
 
       - name: Build with latest sphinx version
-        run: uv run sphinx-build -W -E -n -b html docs docs/_build/html
+        run: uv run sphinx-build -W -E -n -j auto -b html docs docs/_build/html

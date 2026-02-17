@@ -193,13 +193,7 @@ class TestInlineMarkdown(RendererTestBase):
     def test_image_link(self):
         src = "[![Alt Text](image_target_url)](link_target_url)"
         out = self.conv(src)
-        expected = """
-
-.. image:: image_target_url
-   :target: link_target_url
-   :alt: Alt Text
-
-"""
+        expected = "\n.. image:: image_target_url\n   :target: link_target_url\n   :alt: Alt Text\n\n"
         self.assertEqual(out, expected)
 
     def test_rest_role(self):
@@ -288,19 +282,22 @@ class TestInlineMarkdown(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(out, PROLOG + "\nthis is :raw-html-m2r:`<s>html</s>`.\n")
 
+    def test_inline_html_with_colon(self):
+        """Inline HTML containing colons must be properly merged."""
+        src = "text <b>10:30</b> more"
+        out = self.conv(src)
+        self.assertIn(":raw-html-m2r:`<b>10:30</b>`", out)
+
     def test_inline_html_with_backtick(self):
         """Backticks in inline HTML must be escaped to avoid breaking RST role syntax."""
         src = 'text <span title="a`b">hello</span> text'
         out = self.conv(src)
-        self.assertIn(":raw-html-m2r:", out)
-        # Backtick must be escaped as &#96;
-        self.assertNotIn("`a`", out.split(":raw-html-m2r:")[1].split("`")[0])
-        self.assertIn("&#96;", out)
+        self.assertIn('title="a&#96;b"', out)
 
     def test_block_html(self):
         src = "<h1>title</h1>"
         out = self.conv(src)
-        self.assertEqual(out, "\n\n.. raw:: html\n\n   <h1>title</h1>\n\n")
+        self.assertEqual(out, "\n.. raw:: html\n\n   <h1>title</h1>\n\n")
 
 
 class TestNoUnderscoreEmphasis(RendererTestBase):
@@ -424,10 +421,9 @@ class TestImage(RendererTestBase):
     def test_image(self):
         src = "![alt text](a.png)"
         out = self.conv(src)
-        # first and last newline is inserted by paragraph
         self.assertEqual(
             out,
-            "\n\n.. image:: a.png\n   :target: a.png\n   :alt: alt text\n\n",
+            "\n.. image:: a.png\n   :target: a.png\n   :alt: alt text\n\n",
         )
 
     def test_image_title(self):
@@ -479,12 +475,12 @@ class TestList(RendererTestBase):
     def test_ul(self):
         src = "* list"
         out = self.conv(src)
-        self.assertEqual(out, "\n\n* list\n")
+        self.assertEqual(out, "\n* list\n")
 
     def test_ol(self):
         src = "1. list"
         out = self.conv(src)
-        self.assertEqual(out, "\n\n#. list\n")
+        self.assertEqual(out, "\n#. list\n")
 
     def test_nested_ul(self):
         src = """\
@@ -496,7 +492,7 @@ class TestList(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(
             out,
-            "\n\n* list 1\n* list 2\n\n  * list 2.1\n  * list 2.2\n\n* list 3\n",
+            "\n* list 1\n* list 2\n\n  * list 2.1\n  * list 2.2\n\n* list 3\n",
         )
 
     def test_nested_ul_2(self):
@@ -510,7 +506,6 @@ class TestList(RendererTestBase):
 * list 3"""
         out = self.conv(src)
         expected = """\
-
 
 * list 1
 * list 2
@@ -533,7 +528,7 @@ class TestList(RendererTestBase):
   3. list 2.2
 3. list 3"""
         out = self.conv(src)
-        expected = """
+        expected = """\
 
 #. list 1
 #. list 2
@@ -557,7 +552,6 @@ class TestList(RendererTestBase):
         out = self.conv(src)
         expected = """\
 
-
 #. list 1
 #. list 2
 
@@ -580,7 +574,7 @@ class TestList(RendererTestBase):
     2. list 2.2.2
 7. list 3"""
 
-        expected = """
+        expected = """\
 
 #. list 1
 #. list 2
@@ -612,7 +606,6 @@ class TestList(RendererTestBase):
 * list 3"""
         out = self.conv(src)
         expected = """\
-
 
 * list 1
   list 1 cont
@@ -647,7 +640,6 @@ class TestList(RendererTestBase):
         out = self.conv(src)
         expected = """\
 
-
 #. list 1
    list 1 cont
 #. list 2
@@ -680,7 +672,6 @@ class TestList(RendererTestBase):
 1. list 3"""
         out = self.conv(src)
         expected = """\
-
 
 #. list 1
    list 1 cont
@@ -715,10 +706,8 @@ class TestList(RendererTestBase):
         """Code spans containing RST role syntax must not break docutils."""
         src = "* support backticks (`` `text`:role: style``)"
         out = self.conv(src)
-        # The backtick-role content must be inside an RST inline literal
-        self.assertIn("``", out)
-        # Must NOT contain bare :role: outside of inline literal
-        # (check_rst validates this produces valid RST)
+        # The backtick-role content must be rendered as inline literal
+        self.assertIn("```text`:role: style``", out)
 
 
 class TestComplexText(RendererTestBase):
@@ -843,7 +832,7 @@ class TestRestCode(RendererTestBase):
     def test_rest_code_block_empty(self):
         src = "\n\n::\n\n"
         out = self.conv(src)
-        self.assertEqual(out, "\n\n")
+        self.assertEqual(out, "\n")
 
     def test_eol_marker(self):
         src = "a::\n\n    code\n"

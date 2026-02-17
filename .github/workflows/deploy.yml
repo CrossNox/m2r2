@@ -6,6 +6,10 @@ on:
     tags:
       - 'v*.*.*'
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -51,7 +55,7 @@ jobs:
         run: uv build
 
       - name: Publish package to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1.13
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13
         with:
           user: __token__
           password: ${{ secrets.test_pypi_token }}
@@ -79,7 +83,7 @@ jobs:
         run: uv build
 
       - name: Publish package to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1.13
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}
@@ -99,6 +103,9 @@ jobs:
       - name: Commit documentation changes
         run: |
           git clone https://github.com/crossnox/m2r2.git --branch gh-pages --single-branch gh-pages
+          cd gh-pages
+          git rm -rf . || true
+          cd ..
           cp -r docs/_build/html/* gh-pages/
           cd gh-pages
           git config --local user.email "action@github.com"

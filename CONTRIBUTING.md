@@ -50,21 +50,18 @@ uv run --python 3.11 pytest
 
 ### Code Quality
 
+Pre-commit hooks handle formatting, linting, type checking, and tests
+automatically. Install them with:
+
 ```bash
-# Format code
-uv run ruff format m2r2/ tests/
+uv run pre-commit install
+uv run pre-commit install -t pre-push
+```
 
-# Lint code
-uv run ruff check m2r2/ tests/
+To run all checks manually:
 
-# Lint and auto-fix
-uv run ruff check --fix m2r2/ tests/
-
-# Type checking
-uv run mypy m2r2/
-
-# Security scan
-uv run bandit -r m2r2/
+```bash
+uv run pre-commit run --all-files
 ```
 
 ### Building Documentation
@@ -103,18 +100,12 @@ m2r2/
    uv run pytest
    ```
 
-3. Format and lint your code:
-   ```bash
-   uv run ruff format m2r2/ tests/
-   uv run ruff check --fix m2r2/ tests/
-   ```
-
-4. Commit your changes with a clear message:
+3. Commit your changes with a clear message:
    ```bash
    git commit -m "Add feature: description of your changes"
    ```
 
-5. Push and create a pull request.
+4. Push and create a pull request.
 
 ## Code Style
 

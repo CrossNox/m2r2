@@ -47,7 +47,7 @@
 
 * Add `--disable-inline-math` and `m2r_disable_inline_math` sphinx option
 
-## Version 0.2.0 (2018-08-13)
+### Version 0.2.0 (2018-08-13)
 
 * Add `start-line` and `end-line` option to `mdinclude` directive
 * Add `anonymous_references` option ([#26](https://github.com/miyakogi/m2r/pull/26))
@@ -119,6 +119,6 @@
 
 * Fix Bug: when code or link is placed at the end of line, spaces to the next word is disappeared
 
-## Version 0.1 (2016-05-30)
+### Version 0.1 (2016-05-30)
 
 First public release.
