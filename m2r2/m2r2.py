@@ -11,21 +11,23 @@ from m2r2.rst.renderer import RestRenderer
 
 __version__ = version("m2r2")
 
-# Asterisk-only patterns for no_underscore_emphasis mode
-_ASTERISK_EMPHASIS = r"^\*([^\*]+?)\*(?!\*)"
-_ASTERISK_STRONG = r"^\*\*([^\*]+?)\*\*(?!\*)"
+# Asterisk-only patterns for no_underscore_emphasis mode.
+# These patterns use named groups so that m.group() works correctly
+# when mistune v3 combines all inline patterns into one large regex.
+_ASTERISK_EMPHASIS = r"^\*(?P<emph_text>[^\*]+?)\*(?!\*)"
+_ASTERISK_STRONG = r"^\*\*(?P<strong_text>[^\*]+?)\*\*(?!\*)"
 
 
 def _parse_emphasis_no_underscore(inline, m, state):
     """Parse emphasis using only asterisks (ignoring underscores)."""
-    token = {"type": "emphasis", "raw": m.group(1)}
+    token = {"type": "emphasis", "raw": m.group("emph_text")}
     state.append_token(token)
     return m.end()
 
 
 def _parse_strong_no_underscore(inline, m, state):
     """Parse strong emphasis using only asterisks (ignoring underscores)."""
-    token = {"type": "strong", "raw": m.group(1)}
+    token = {"type": "strong", "raw": m.group("strong_text")}
     state.append_token(token)
     return m.end()
 
