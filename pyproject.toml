@@ -82,6 +82,7 @@ exclude_dirs = ["tests"]
 
 [tool.mypy]
 python_version = "3.9"
+check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = "mistune.*"
@@ -96,7 +97,4 @@ source = ["m2r2"]
 branch = true
 
 [tool.coverage.report]
-exclude_lines = [
-  "pragma: no cover",
-  "if TYPE_CHECKING:",
-]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
