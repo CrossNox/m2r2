@@ -1,6 +1,9 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -20,7 +23,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked --python 3.11
 
       - name: Check formatting
         run: uv run ruff format --check m2r2/ tests/
