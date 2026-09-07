@@ -283,7 +283,7 @@ class RestRenderer(RSTRenderer):
         alt = self.render_children(token, state).replace("\n", " ")
         content = f"image:: {source}\n   :target: {target}\n   :alt: {alt}"
         if not inline:
-            return f"\n.. {content}\n\n"
+            return f"\n\n.. {content}\n\n"
         name = "m2r-image-" + sha256(content.encode("utf-8")).hexdigest()
         state.env["image_definitions"][name] = f".. |{name}| {content}"
         return rf"\ |{name}|\ "
@@ -359,6 +359,7 @@ class RestRenderer(RSTRenderer):
         """Render list items with their blocks in source order."""
         marker = "#. " if token["attrs"]["ordered"] else "* "
         items = []
+        separator = ""
         for item in token["children"]:
             content = self.render_children(item, state).strip("\n")
             lines = content.split("\n")
@@ -366,9 +367,23 @@ class RestRenderer(RSTRenderer):
                 " " * len(marker) + line if line != "" else "" for line in lines[1:]
             )
             items.append(
-                marker + lines[0] + ("\n" + continuation if len(lines) > 1 else "")
+                separator
+                + marker
+                + lines[0]
+                + ("\n" + continuation if len(lines) > 1 else "")
             )
-        return "\n" + "\n\n".join(items) + "\n"
+            # Keep simple siblings compact, but terminate nested/multiple blocks
+            # and preserve blank lines explicitly separating source items.
+            blocks = [
+                child for child in item["children"] if child["type"] != "blank_line"
+            ]
+            separator = "\n\n" if item.get("blank_after") or len(blocks) > 1 else "\n"
+        previous = token.get("prev")
+        # Preserve the legacy spacing after headings and preceding lists.
+        prefix = (
+            "\n\n" if previous and previous["type"] in ("heading", "list") else "\n"
+        )
+        return prefix + "".join(items) + "\n"
 
     def table(self, token, state):
         """Render table as RST list-table directive"""

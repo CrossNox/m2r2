@@ -169,7 +169,13 @@ def parse_visual_list_nested(
         )
         child = state.child_state(content.rstrip("\n") + "\n")
         block.parse(child)
-        items.append({"type": "list_item", "children": child.tokens})
+        items.append(
+            {
+                "type": "list_item",
+                "children": child.tokens,
+                "blank_after": bool(lines and lines[-1] == "\n"),
+            }
+        )
         next_match = re.compile(VISUAL_LIST_PATTERN, re.M).match(
             state.src, state.cursor
         )

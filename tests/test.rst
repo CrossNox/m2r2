@@ -29,20 +29,18 @@ Also within parentheses (:math:`x^2`) and (:math:`z^3`).
 Lists
 ^^^^^
 
-* item one
 
+* item one
 * item two
 
   * nested a
-
   * nested b
 
 * item three
 
+
 #. first
-
 #. second
-
 #. third
 
 Code and Inline
@@ -57,6 +55,7 @@ Here is ``inline code`` in a sentence.
 
 Image
 ^^^^^
+
 
 .. image:: example.png
    :target: example.png
