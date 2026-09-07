@@ -68,6 +68,15 @@ def parse_rest_code_block(block, m: Match, state: BlockState):
 
 
 # Inline parsers
+def parse_autolink(inline, m: Match, state: InlineState):
+    """Leave URL and email autolinking to RST, without creating named targets."""
+    text = m.group(0)
+    if not state.in_link:
+        text = text[1:-1]
+    inline.process_text(text, state)
+    return m.end()
+
+
 def parse_rest_role(inline, m: Match, state: InlineState):
     """Parse RST role"""
     text = m.group(0)
@@ -184,6 +193,8 @@ def parse_visual_list_nested(
 def rst_directives(md):
     """Plugin to handle RST directives and inline elements"""
     md.block.register("list", VISUAL_LIST_PATTERN, parse_visual_list_nested)
+    md.inline.register("auto_link", None, parse_autolink)
+    md.inline.register("auto_email", None, parse_autolink)
 
     # Register directive parsers before indent_code so indented directives are recognized
     md.block.register(

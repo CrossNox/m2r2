@@ -81,6 +81,7 @@ class MdInclude(rst.Directive):
                 parse_relative_links=config.m2r_parse_relative_links,
                 anonymous_references=config.m2r_anonymous_references,
                 use_mermaid=config.m2r_use_mermaid,
+                is_sphinx=True,
                 existing_substitutions=self.state.document.substitution_defs,
             ),
         )

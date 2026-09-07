@@ -11,7 +11,10 @@ from io import StringIO
 from pathlib import Path
 from unittest import TestCase
 
+from docutils import nodes
 from sphinx.testing.util import SphinxTestApp
+
+from m2r2 import convert
 
 
 def _build(conf="", files=None):
@@ -139,6 +142,15 @@ _underscored_ text
 class TestM2R2Parser(SphinxTestBase):
     """Test M2R2Parser as a Sphinx source parser."""
 
+    def test_unlabelled_code_block(self):
+        app, _, warning = self.build(files={"index.md": "```\ncode\n```\n"})
+        self.assertEqual(warning, "")
+        blocks = list(app.env.get_doctree("index").findall(nodes.literal_block))
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].astext(), "code")
+        self.assertNotIn("code", blocks[0]["classes"])
+        self.assertEqual(convert("```\ncode\n```"), "\n.. code-block::\n\n   code\n")
+
     def test_basic_markdown_build(self):
         _, outdir, _ = self.build(
             files={
@@ -241,6 +253,19 @@ Plain text only.
 
 class TestMdInclude(SphinxTestBase):
     """Test the mdinclude directive."""
+
+    def test_unlabelled_code_block(self):
+        app, _, warning = self.build(
+            files={
+                "index.rst": ".. mdinclude:: code.txt\n",
+                "code.txt": "```\ncode\n```\n",
+            }
+        )
+        self.assertEqual(warning, "")
+        blocks = list(app.env.get_doctree("index").findall(nodes.literal_block))
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].astext(), "code")
+        self.assertNotIn("code", blocks[0]["classes"])
 
     def test_repeated_image_in_included_tables(self):
         """Render repeated image substitutions across included documents."""

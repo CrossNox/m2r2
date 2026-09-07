@@ -29,11 +29,13 @@ class RestRenderer(RSTRenderer):
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
+        is_sphinx: bool = False,
         existing_substitutions: Container[str] = (),
     ) -> None:
         self.parse_relative_links = parse_relative_links
         self.anonymous_references = anonymous_references
         self.use_mermaid = use_mermaid
+        self.is_sphinx = is_sphinx
         self.existing_substitutions = existing_substitutions
         super().__init__()
 
@@ -145,8 +147,10 @@ class RestRenderer(RSTRenderer):
             first_line = "\n.. mermaid::\n\n"
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
-        else:
+        elif self.is_sphinx:
             first_line = "\n::\n\n"
+        else:
+            first_line = "\n.. code-block::\n\n"
         return first_line + self._indent_block(code_text) + "\n"
 
     def directive(self, token, state):
@@ -332,13 +336,23 @@ class RestRenderer(RSTRenderer):
         self, token: dict[str, Any], state: BlockState, marker: str
     ) -> str:
         """Apply emphasis to text without nesting RST inline markup."""
+
+        def emphasize(text):
+            content = text.strip()
+            if content:
+                return text.replace(content, rf"\ {marker}{content}{marker}\ ", 1)
+            return text
+
         parts = []
+        text = ""
         for child in token["children"]:
-            text = self.render_token(child, state)
-            if child["type"] == "text" and text.strip() != "":
-                content = text.strip()
-                text = text.replace(content, rf"\ {marker}{content}{marker}\ ", 1)
-            parts.append(text)
+            if child["type"] in ("text", "softbreak"):
+                text += self.render_token(child, state)
+            else:
+                parts.append(emphasize(text))
+                text = ""
+                parts.append(self.render_token(child, state))
+        parts.append(emphasize(text))
         return "".join(parts)
 
     def list(self, token: dict[str, Any], state: BlockState) -> str:

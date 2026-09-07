@@ -99,6 +99,61 @@ ghi"""
 
 
 class TestInlineMarkdown(RendererTestBase):
+    def test_multiline_emphasis(self):
+        src = "*first\nsecond*"
+        self.assertEqual(self.conv(src), "\n*first\nsecond*\n")
+
+    def test_multiline_strong(self):
+        src = "**first\nsecond**"
+        self.assertEqual(self.conv(src), "\n**first\nsecond**\n")
+
+    def test_multiline_emphasis_with_link(self):
+        src = "*first\nsecond [link](page) third\nfourth*"
+        expected = "\n*first\nsecond* `link <page>`_ *third\nfourth*\n"
+        self.assertEqual(self.conv(src), expected)
+
+    def test_multiline_strong_with_code(self):
+        src = "**first\nsecond `code` third\nfourth**"
+        expected = "\n**first\nsecond** ``code`` **third\nfourth**\n"
+        self.assertEqual(self.conv(src), expected)
+
+    def test_url_autolink(self):
+        self.assertEqual(self.conv("<https://example.com>"), "\nhttps://example.com\n")
+
+    def test_email_autolink(self):
+        self.assertEqual(self.conv("<a@example.com>"), "\na@example.com\n")
+
+    def test_autolink_with_existing_target(self):
+        src = """\
+<https://example.com>
+
+See `https://example.com`_.
+
+.. _https://example.com: https://other.example"""
+        expected = """
+https://example.com
+
+See `https://example.com`_.
+
+.. _https://example.com: https://other.example"""
+        self.assertEqual(self.conv(src), expected)
+
+    def test_autolink_ignores_reference_options(self):
+        self.assertEqual(
+            self.conv(
+                "<https://example.com> <a@example.com>",
+                anonymous_references=True,
+                parse_relative_links=True,
+            ),
+            "\nhttps://example.com a@example.com\n",
+        )
+
+    def test_explicit_link_with_url_label(self):
+        self.assertEqual(
+            self.conv("[https://example.com](https://example.com)"),
+            "\n`https://example.com <https://example.com>`_\n",
+        )
+
     def test_link_adjacent_to_text(self):
         self.assertEqual(
             self.conv("prefix[link](https://example.com)suffix"),
@@ -349,6 +404,16 @@ this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
 
+    def test_multiline_emphasis(self):
+        src = "*first\nsecond* _plain_"
+        expected = "\n*first\nsecond* _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
+    def test_multiline_strong(self):
+        src = "**first\nsecond** _plain_"
+        expected = "\n**first\nsecond** _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
     def test_nested_emphasis(self):
         src = "*a [link](page) and `code`* _plain_"
         expected = "\n*a* `link <page>`_ *and* ``code`` _plain_\n"
@@ -464,7 +529,7 @@ class TestCodeBlock(RendererTestBase):
 pip install sphinx
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n::\n\n   pip install sphinx\n")
+        self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
 
     def test_plain_code_block_tilda(self):
         src = """\
@@ -472,7 +537,7 @@ pip install sphinx
 pip install sphinx
 ~~~"""
         out = self.conv(src)
-        self.assertEqual(out, "\n::\n\n   pip install sphinx\n")
+        self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
 
     def test_code_block_math(self):
         src = """\
@@ -496,7 +561,9 @@ pip install sphinx
     new line
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n::\n\n   pip install sphinx\n       new line\n")
+        self.assertEqual(
+            out, "\n.. code-block::\n\n   pip install sphinx\n       new line\n"
+        )
 
     def test_python_code_block(self):
         src = """\
@@ -1418,7 +1485,7 @@ a::
             """
 a:
 
-::
+.. code-block::
 
    code
 """,
@@ -1436,7 +1503,7 @@ a ::
             """
 a
 
-::
+.. code-block::
 
    code
 """,
