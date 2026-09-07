@@ -998,7 +998,7 @@ after
         out = self.conv(src)
         self.assertEqual(
             out,
-            "\n* list 1\n* list 2\n\n  * list 2.1\n  * list 2.2\n\n* list 3\n",
+            "\n* list 1\n\n* list 2\n\n  * list 2.1\n\n  * list 2.2\n\n* list 3\n",
         )
 
     def test_nested_ul_2(self):
@@ -1014,12 +1014,15 @@ after
         expected = """\
 
 * list 1
+
 * list 2
 
   * list 2.1
+
   * list 2.2
 
     * list 2.2.1
+
     * list 2.2.2
 
 * list 3
@@ -1037,9 +1040,11 @@ after
         expected = """\
 
 #. list 1
+
 #. list 2
 
    #. list 2.1
+
    #. list 2.2
 
 #. list 3
@@ -1059,12 +1064,15 @@ after
         expected = """\
 
 #. list 1
+
 #. list 2
 
    #. list 2.1
+
    #. list 2.2
 
       #. list 2.2.1
+
       #. list 2.2.2
 
 #. list 3
@@ -1083,12 +1091,15 @@ after
         expected = """\
 
 #. list 1
+
 #. list 2
 
    * list 2.1
+
    * list 2.2
 
      #. list 2.2.1
+
      #. list 2.2.2
 
 #. list 3
@@ -1115,15 +1126,18 @@ after
 
 * list 1
   list 1 cont
+
 * list 2
   list 2 cont
 
   * list 2.1
     list 2.1 cont
+
   * list 2.2
     list 2.2 cont
 
     * list 2.2.1
+
     * list 2.2.2
 
 * list 3
@@ -1148,15 +1162,18 @@ after
 
 #. list 1
    list 1 cont
+
 #. list 2
    list 2 cont
 
    #. list 2.1
       list 2.1 cont
+
    #. list 2.2
       list 2.2 cont
 
       #. list 2.2.1
+
       #. list 2.2.2
 
 #. list 3
@@ -1181,15 +1198,18 @@ after
 
 #. list 1
    list 1 cont
+
 #. list 2
    list 2 cont
 
    * list 2.1
      list 2.1 cont
+
    * list 2.2
      list 2.2 cont
 
      #. list 2.2.1
+
      #. list 2.2.2
 
 #. list 3
