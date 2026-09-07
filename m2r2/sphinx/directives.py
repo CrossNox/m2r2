@@ -5,7 +5,8 @@ from docutils import io, statemachine, utils
 from docutils.parsers import rst
 from docutils.parsers.rst import directives
 
-from m2r2 import M2R2
+from m2r2.m2r2 import M2R2
+from m2r2.rst.renderer import RestRenderer
 
 
 class MdInclude(rst.Directive):
@@ -26,9 +27,7 @@ class MdInclude(rst.Directive):
     def run(self):
         if not self.state.document.settings.file_insertion_enabled:
             raise self.warning(f'"{self.name}" directive disabled.')
-        source = self.state_machine.input_lines.source(
-            self.lineno - self.state_machine.input_offset - 1
-        )
+        source = self.state_machine.get_source(self.lineno - 1)
         source_dir = os.path.dirname(os.path.abspath(source))
         path = rst.directives.path(self.arguments[0])
         path = os.path.normpath(os.path.join(source_dir, path))
@@ -77,10 +76,13 @@ class MdInclude(rst.Directive):
         config = self.state.document.settings.env.config
         converter = M2R2(
             no_underscore_emphasis=config.m2r_no_underscore_emphasis,
-            parse_relative_links=config.m2r_parse_relative_links,
-            anonymous_references=config.m2r_anonymous_references,
             disable_inline_math=config.m2r_disable_inline_math,
-            use_mermaid=config.m2r_use_mermaid,
+            renderer=RestRenderer(
+                parse_relative_links=config.m2r_parse_relative_links,
+                anonymous_references=config.m2r_anonymous_references,
+                use_mermaid=config.m2r_use_mermaid,
+                existing_substitutions=self.state.document.substitution_defs,
+            ),
         )
         include_lines = statemachine.string2lines(
             converter(rawtext), tab_width, convert_whitespace=True

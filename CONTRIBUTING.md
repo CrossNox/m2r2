@@ -48,6 +48,10 @@ uv run pytest tests/test_cli.py::TestConvert::test_parse_file
 uv run --python 3.11 pytest
 ```
 
+Conversion tests should check that docutils accepts the generated RST and that
+the document keeps its content and structure. Compare document trees when
+spacing is incidental. Check literal code content exactly.
+
 ### Code Quality
 
 Pre-commit hooks handle formatting, linting, type checking, and tests
@@ -58,17 +62,32 @@ uv run pre-commit install
 uv run pre-commit install -t pre-push
 ```
 
-To run all checks manually:
+To run the commit hooks manually:
 
 ```bash
 uv run pre-commit run --all-files
 ```
+
+Run `uv run pytest` separately, or use
+`uv run pre-commit run --all-files --hook-stage pre-push` for the test hook.
 
 ### Building Documentation
 
 ```bash
 uv run sphinx-build -E -W -n -j auto -b html docs docs/_build/html
 ```
+
+### Release Checks
+
+Before a release, build and validate both distributions:
+
+```bash
+uv build
+uvx twine check dist/*
+```
+
+Publishing waits for the Python test matrix, minimum dependency tests, Sphinx
+builds, and lint workflow.
 
 ## Project Structure
 

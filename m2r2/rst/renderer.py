@@ -1,6 +1,7 @@
 import html
 import os
-from collections.abc import Iterable
+from collections.abc import Container, Iterable
+from hashlib import sha256
 from typing import Any, ClassVar
 from urllib.parse import urlparse
 
@@ -10,6 +11,8 @@ from mistune.renderers.rst import RSTRenderer
 
 
 class RestRenderer(RSTRenderer):
+    """Render Markdown as RST with embedded directives and inline roles."""
+
     indent = " " * 3
     hmarks: ClassVar[dict[int, str]] = {
         1: "=",
@@ -26,10 +29,12 @@ class RestRenderer(RSTRenderer):
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
-    ):
+        existing_substitutions: Container[str] = (),
+    ) -> None:
         self.parse_relative_links = parse_relative_links
         self.anonymous_references = anonymous_references
         self.use_mermaid = use_mermaid
+        self.existing_substitutions = existing_substitutions
         super().__init__()
 
     def iter_tokens(
@@ -76,9 +81,19 @@ class RestRenderer(RSTRenderer):
             prev_tok = tok
             yield self.render_token(tok, state)
 
-    def __call__(self, tokens, state):
-        """Override to avoid stripping trailing newlines."""
-        return self.render_tokens(tokens, state)
+    def __call__(self, tokens: Iterable[dict[str, Any]], state: BlockState) -> str:
+        """Render a document with its image substitution definitions."""
+        state.env["image_definitions"] = {}
+        output = self.render_tokens(tokens, state)
+        definitions = [
+            definition
+            for name, definition in state.env["image_definitions"].items()
+            if name not in self.existing_substitutions
+        ]
+        if len(definitions) > 0:
+            # Define substitutions before mdinclude directives can reuse them.
+            output = "\n\n".join(definitions) + "\n\n" + output
+        return output
 
     def thematic_break(self, token, state):
         """Override to use shorter horizontal rule"""
@@ -88,15 +103,18 @@ class RestRenderer(RSTRenderer):
         """Override to use raw HTML format instead of line blocks"""
         return "\\ :raw-html-m2r:`<br>`\n"
 
-    def paragraph(self, token, state):
-        """Override to preserve line breaks in paragraphs.
-
-        Block-level elements (image links) handle their own spacing and
-        should not be wrapped with extra newlines.
-        """
+    def paragraph(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render a paragraph or a standalone image block."""
+        children = token["children"]
+        target = None
+        if len(children) == 1 and children[0]["type"] == "link":
+            target = children[0]["attrs"]["url"]
+            children = children[0]["children"]
+        if len(children) == 1 and children[0]["type"] == "image":
+            if target is None:
+                target = children[0]["attrs"]["url"]
+            return self.render_image(children[0], state, target=target, inline=False)
         text = self.render_children(token, state)
-        if text.startswith("\n\n.. image::"):
-            return text
         return f"\n{text}\n"
 
     def softbreak(self, token, state):
@@ -128,7 +146,7 @@ class RestRenderer(RSTRenderer):
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
         else:
-            first_line = "\n.. code-block::\n\n"
+            first_line = "\n::\n\n"
         return first_line + self._indent_block(code_text) + "\n"
 
     def directive(self, token, state):
@@ -150,13 +168,6 @@ class RestRenderer(RSTRenderer):
         else:
             # Single or no trailing newline - just return content without newline
             return content
-
-    def image_link(self, token, state):
-        """Render image link"""
-        alt = token.get("alt", "")
-        url = token.get("url", "")
-        target = token.get("target", "")
-        return f"\n\n.. image:: {url}\n   :target: {target}\n   :alt: {alt}\n\n"
 
     def rest_role(self, token, state):
         """Pass through RST role"""
@@ -180,18 +191,13 @@ class RestRenderer(RSTRenderer):
         marker = token.get("marker", "")
         return marker
 
-    def link(self, token, state):
-        """Override to use single underscore for named references"""
-        # Extract URL from token attrs in mistune v3
-        if "attrs" in token and "url" in token["attrs"]:
-            link = token["attrs"]["url"]
-        else:
-            link = token.get("url", "")
-
-        if "attrs" in token and "title" in token["attrs"]:
-            title = token["attrs"]["title"]
-        else:
-            title = token.get("title", "")
+    def link(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render a hyperlink or a Sphinx document reference."""
+        link = token["attrs"]["url"]
+        title = token["attrs"].get("title")
+        children = token["children"]
+        if len(children) == 1 and children[0]["type"] == "image":
+            return self.render_image(children[0], state, target=link)
 
         text = self.render_children(token, state)
 
@@ -206,21 +212,21 @@ class RestRenderer(RSTRenderer):
             )
 
         if not self.parse_relative_links:
-            return f"`{text} <{link}>`{underscore}"
+            return rf"\ `{text} <{link}>`{underscore}\ "
 
         url_info = urlparse(link)
         if url_info.scheme:
-            return f"`{text} <{link}>`{underscore}"
+            return rf"\ `{text} <{link}>`{underscore}\ "
 
         if url_info.fragment and not url_info.path:
             # Anchor-only link, e.g. [text](#anchor)
-            return f":ref:`{text} <{url_info.fragment}>`"
+            return rf"\ :ref:`{text} <{url_info.fragment}>`\ "
 
         # Document link, e.g. [text](page.md) or [text](page.md#anchor).
         # The :doc: directive does not support anchors, so the fragment
         # is intentionally discarded — matching the original m2r behavior.
         doc_link = os.path.splitext(url_info.path)[0]
-        return f":doc:`{text} <{doc_link}>`"
+        return rf"\ :doc:`{text} <{doc_link}>`\ "
 
     def heading(self, token, state):
         """Override to fix heading underlines for multibyte characters"""
@@ -256,25 +262,27 @@ class RestRenderer(RSTRenderer):
         indented = self._indent_block(children.strip())
         return f"\n..\n\n{indented}\n\n"
 
-    def image(self, token, state):
-        """Render image"""
-        # Extract from our custom token structure
-        src = token.get("src", "")
-        alt = token.get("alt", "")
+    def image(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render an inline image with a link to its source."""
+        return self.render_image(token, state, target=token["attrs"]["url"])
 
-        if not src:
-            return ""
-
-        # RST image directive format
-        lines = [
-            "",
-            f".. image:: {src}",
-            f"   :target: {src}",
-        ]
-        if alt:
-            lines.append(f"   :alt: {alt}")
-        lines.append("")
-        return "\n".join(lines)
+    def render_image(
+        self,
+        token: dict[str, Any],
+        state: BlockState,
+        target: str,
+        *,
+        inline: bool = True,
+    ) -> str:
+        """Render an image as a block directive or an inline substitution."""
+        source = token["attrs"]["url"]
+        alt = self.render_children(token, state).replace("\n", " ")
+        content = f"image:: {source}\n   :target: {target}\n   :alt: {alt}"
+        if not inline:
+            return f"\n.. {content}\n\n"
+        name = "m2r-image-" + sha256(content.encode("utf-8")).hexdigest()
+        state.env["image_definitions"][name] = f".. |{name}| {content}"
+        return rf"\ |{name}|\ "
 
     def block_html(self, token, state):
         """Render block HTML as raw HTML directive"""
@@ -314,133 +322,39 @@ class RestRenderer(RSTRenderer):
         text = self.render_children(token, state)
         return self._raw_html(f"<del>{text}</del>")
 
-    def emphasis(self, token, state):
-        """Override to handle custom emphasis tokens"""
-        if "raw" in token:
-            # For our custom no_underscore_emphasis tokens
-            text = token["raw"]
-        else:
-            # For standard tokens, use children
-            text = self.render_children(token, state)
-        return f"*{text}*"
+    def emphasis(self, token: dict[str, Any], state: BlockState) -> str:
+        return self.render_emphasis(token, state, "*")
 
-    def strong(self, token, state):
-        """Override to handle custom strong tokens"""
-        if "raw" in token:
-            # For our custom no_underscore_emphasis tokens
-            text = token["raw"]
-        else:
-            # For standard tokens, use children
-            text = self.render_children(token, state)
-        return f"**{text}**"
+    def strong(self, token: dict[str, Any], state: BlockState) -> str:
+        return self.render_emphasis(token, state, "**")
 
-    def block_text(self, token, state):
-        """Override to omit trailing newline that the parent adds.
+    def render_emphasis(
+        self, token: dict[str, Any], state: BlockState, marker: str
+    ) -> str:
+        """Apply emphasis to text without nesting RST inline markup."""
+        parts = []
+        for child in token["children"]:
+            text = self.render_token(child, state)
+            if child["type"] == "text" and text.strip() != "":
+                content = text.strip()
+                text = text.replace(content, rf"\ {marker}{content}{marker}\ ", 1)
+            parts.append(text)
+        return "".join(parts)
 
-        The parent's ``+ "\\n"`` would break list item formatting.
-        """
-        return self.render_children(token, state)
-
-    def list(self, token, state):
-        """Render list with proper RST formatting"""
-        attrs = token.get("attrs", {})
-        ordered = attrs.get("ordered", False)
-        tight = token.get("tight", True)
-
-        # Track list depth and cumulative indent for proper nesting
-        state.env.setdefault("list_depth", 0)
-        state.env.setdefault("list_indent", "")
-
-        current_depth = state.env["list_depth"]
-        current_indent = state.env["list_indent"]
-        state.env["list_depth"] += 1
-
-        # Calculate indent for nested content based on marker width
-        # Ordered lists use "#. " (3 chars), unordered use "* " (2 chars)
-        marker_width = 3 if ordered else 2
-        state.env["list_indent"] = current_indent + " " * marker_width
-
-        # Process list items
-        try:
-            items = []
-            for i, item_token in enumerate(token["children"]):
-                if item_token["type"] == "list_item":
-                    is_last_item = i == len(token["children"]) - 1
-                    item_content = self._render_list_item(
-                        item_token, state, ordered, current_indent, is_last_item
-                    )
-                    items.append(item_content)
-        finally:
-            state.env["list_depth"] -= 1
-            state.env["list_indent"] = current_indent
-
-        # Join items
-        result = "".join(items)
-
-        # Add leading spacing for top-level lists
-        if current_depth == 0:
-            result = "\n\n" + result
-        elif not tight:
-            result = "\n" + result
-
-        return result
-
-    def _render_list_item(self, token, state, ordered, indent, is_last_item=False):
-        """Render a single list item"""
-        # Choose marker
-        if ordered:
-            marker = "#. "
-        else:
-            marker = "* "
-
-        # Separate text content from nested lists
-        text_parts = []
-        nested_lists = []
-        has_nested_list = False
-
-        for child_token in token["children"]:
-            if child_token["type"] == "list":
-                has_nested_list = True
-                nested_content = self.render_token(child_token, state)
-                nested_lists.append(nested_content)
-            elif child_token["type"] != "blank_line":
-                text_parts.append(self.render_token(child_token, state))
-
-        # Process text content
-        text_content = "".join(text_parts).rstrip("\n")
-        if not text_content and not has_nested_list:
-            return indent + marker + "\n"
-
-        # Handle multi-line text content with proper indentation
-        if text_content:
-            lines = text_content.split("\n")
-            first_line = lines[0] if lines else ""
-
-            # Build result starting with the marker and first line
-            result = indent + marker + first_line + "\n"
-
-            # Add continuation lines with proper indentation
-            continuation_indent = indent + " " * len(marker)
-            for line in lines[1:]:
-                if line.strip():  # Only indent non-empty lines
-                    result += continuation_indent + line + "\n"
-                else:
-                    result += "\n"
-        else:
-            result = indent + marker + "\n"
-
-        # Add nested content with proper spacing
-        if nested_lists:
-            # Add blank line before nested lists
-            result += "\n"
-            for nested in nested_lists:
-                # The nested content should already be properly indented
-                result += nested.rstrip("\n") + "\n"
-            # Add blank line after nested lists only if this isn't the last item at this level
-            if not is_last_item:
-                result += "\n"
-
-        return result
+    def list(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render list items with their blocks in source order."""
+        marker = "#. " if token["attrs"]["ordered"] else "* "
+        items = []
+        for item in token["children"]:
+            content = self.render_children(item, state).strip("\n")
+            lines = content.split("\n")
+            continuation = "\n".join(
+                " " * len(marker) + line if line != "" else "" for line in lines[1:]
+            )
+            items.append(
+                marker + lines[0] + ("\n" + continuation if len(lines) > 1 else "")
+            )
+        return "\n" + "\n\n".join(items) + "\n"
 
     def table(self, token, state):
         """Render table as RST list-table directive"""

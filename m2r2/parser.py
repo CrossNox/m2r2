@@ -1,6 +1,6 @@
 from docutils.parsers import rst
 
-from m2r2 import M2R2
+from m2r2.m2r2 import M2R2
 
 
 class M2R2Parser(rst.Parser):

@@ -5,29 +5,26 @@ from m2r2.parser import M2R2Parser
 from m2r2.sphinx.directives import MdInclude
 
 
-def _migrate_deprecated_config(app, config):
-    """Copy deprecated ``no_underscore_emphasis`` to ``m2r_no_underscore_emphasis``.
-
-    If the user explicitly set the new config name, it takes precedence
-    over the deprecated one.
-    """
-    if config.no_underscore_emphasis:
+def warn_deprecated_config(app):
+    """Warn when the deprecated emphasis option is enabled."""
+    if app.config.no_underscore_emphasis:
         warnings.warn(
             "The 'no_underscore_emphasis' config value is deprecated. "
             "Use 'm2r_no_underscore_emphasis' instead.",
             DeprecationWarning,
-            stacklevel=1,
+            stacklevel=2,
         )
-        # Only migrate if the new config is still at its default value
-        if not config.m2r_no_underscore_emphasis:
-            config.m2r_no_underscore_emphasis = config.no_underscore_emphasis
 
 
 def setup(app):
     """Register m2r2 config values, source parser, and mdinclude directive."""
     # Deprecated name kept for backward compatibility
     app.add_config_value("no_underscore_emphasis", False, "env")
-    app.add_config_value("m2r_no_underscore_emphasis", False, "env")
+    app.add_config_value(
+        "m2r_no_underscore_emphasis",
+        lambda config: config.no_underscore_emphasis,
+        "env",
+    )
     app.add_config_value("m2r_parse_relative_links", False, "env")
     app.add_config_value("m2r_anonymous_references", False, "env")
     app.add_config_value("m2r_disable_inline_math", False, "env")
@@ -36,16 +33,12 @@ def setup(app):
         "sphinxcontrib.mermaid" in app.config.extensions,
         "env",
     )
-    try:
-        app.connect("config-inited", _migrate_deprecated_config)
-    except KeyError:
-        # Sphinx < 1.8 doesn't have the config-inited event
-        pass
-    try:
+    app.connect("builder-inited", warn_deprecated_config)
+    if hasattr(app, "add_source_suffix"):
         app.add_source_suffix(".md", "markdown")
         app.add_source_parser(M2R2Parser)
-    except (TypeError, AttributeError):
-        app.add_source_parser(".md", M2R2Parser)  # Sphinx < 4.0
+    else:
+        app.add_source_parser(".md", M2R2Parser)  # Sphinx 1.7
     app.add_directive("mdinclude", MdInclude)
     return {
         "version": __version__,

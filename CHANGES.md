@@ -1,8 +1,10 @@
 ### Version 1.0.0 (2026-02-11)
-* Drop support for Python < 3.9
-* Upgrade to mistune 3.0+
-* Upgrade to docutils 0.19+
-* **Breaking**: Rename Sphinx config `no_underscore_emphasis` to `m2r_no_underscore_emphasis` for consistency with other `m2r_` prefixed options
+* Drop support for Python < 3.9.
+* Upgrade to Mistune 3.0+.
+* Rename the converter class to `M2R2`, retaining `M2R` as an alias.
+* Deprecate Sphinx config `no_underscore_emphasis` in favor of `m2r_no_underscore_emphasis`.
+* Support inline images, including images in table cells, using RST substitutions.
+* Render links and code inside emphasis independently to avoid unsupported nested RST markup.
 
 ### Version 0.3.4 (2025-05-01)
 * Fixed dependencies errors

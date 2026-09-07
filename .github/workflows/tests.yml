@@ -35,7 +35,7 @@ jobs:
 
       - name: Test minimum converter dependencies
         if: matrix.python-version == '3.9'
-        run: uv run --with "mistune==3.0.0" --with "docutils==0.19" pytest tests/test_cli.py tests/test_renderer.py tests/test_m2r2.py
+        run: uv run --with "mistune==3.0.0" --with "docutils==0.19" pytest tests --ignore=tests/test_sphinx.py
 
   sphinx_old:
     runs-on: ubuntu-latest

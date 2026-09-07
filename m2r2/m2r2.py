@@ -1,5 +1,6 @@
 import re
 from importlib.metadata import PackageNotFoundError, version
+from typing import cast
 
 import mistune
 from mistune.plugins.footnotes import footnotes
@@ -14,25 +15,8 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
-# Asterisk-only patterns for no_underscore_emphasis mode.
-# These patterns use named groups so that m.group() works correctly
-# when mistune v3 combines all inline patterns into one large regex.
-_ASTERISK_EMPHASIS = r"^\*(?P<emph_text>[^\*]+?)\*(?!\*)"
-_ASTERISK_STRONG = r"^\*\*(?P<strong_text>[^\*]+?)\*\*(?!\*)"
-
-
-def _parse_emphasis_no_underscore(inline, m, state):
-    """Parse emphasis using only asterisks (ignoring underscores)."""
-    token = {"type": "emphasis", "raw": m.group("emph_text")}
-    state.append_token(token)
-    return m.end()
-
-
-def _parse_strong_no_underscore(inline, m, state):
-    """Parse strong emphasis using only asterisks (ignoring underscores)."""
-    token = {"type": "strong", "raw": m.group("strong_text")}
-    state.append_token(token)
-    return m.end()
+# Keep Mistune's recursive emphasis parser, restricting only its start marker.
+_ASTERISK_EMPHASIS = r"\*{1,3}(?=[^\s*])"
 
 
 # RST role definition prepended to output when raw HTML is used
@@ -53,6 +37,8 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
 
 
 class M2R2:
+    """Convert Markdown documents using configurable RST rendering options."""
+
     def __init__(
         self,
         renderer=None,
@@ -63,7 +49,7 @@ class M2R2:
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
-    ):
+    ) -> None:
         if renderer is None:
             renderer = RestRenderer(
                 parse_relative_links=parse_relative_links,
@@ -82,51 +68,36 @@ class M2R2:
             if disable_inline_math and "inline_math" in md.inline.rules:
                 md.inline.rules.remove("inline_math")
             if no_underscore_emphasis:
-                md.inline.register(
-                    "emphasis",
-                    _ASTERISK_EMPHASIS,
-                    _parse_emphasis_no_underscore,
-                    before="codespan",
-                )
-                md.inline.register(
-                    "strong",
-                    _ASTERISK_STRONG,
-                    _parse_strong_no_underscore,
-                    before="codespan",
-                )
+                md.inline.specification["emphasis"] = _ASTERISK_EMPHASIS
 
         # Add RST directive plugin function
         plugins.append(custom_rst_directives)
 
         # Add table, footnote, and strikethrough support
-        plugins.append(table)
-        plugins.append(footnotes)
-        plugins.append(strikethrough)
+        plugins.extend([table, footnotes, strikethrough])
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=renderer, plugins=plugins)
         self.renderer = renderer
 
-    def parse(self, s):
-        output = self.md(s)
+    def parse(self, s: str) -> str:
+        """Convert one Markdown document to RST."""
+        output = cast(str, self.md(s))
         return self.post_process(output)
 
-    def __call__(self, s):
+    def __call__(self, s: str) -> str:
         return self.parse(s)
 
-    def post_process(self, text):
+    def post_process(self, text: str) -> str:
+        """Normalize inline RST boundaries and define the raw HTML role."""
         # Ensure output starts with exactly one leading newline
         text = "\n" + text.lstrip("\n")
 
         # Merge adjacent raw-html-m2r roles that mistune v3 splits across tokens.
         # e.g. :raw-html-m2r:`<s>`\ text\ :raw-html-m2r:`</s>`
         #   -> :raw-html-m2r:`<s>text</s>`
-        for _ in range(10):
-            if not _RAW_HTML_MERGE_PATTERN.search(text):
-                break
+        while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
             text = _RAW_HTML_MERGE_PATTERN.sub(r":raw-html-m2r:`\1\2\3`", text)
-        else:
-            raise RuntimeError("raw-html-m2r merge did not converge")
 
         # Clean up RST escape sequences ("\ ") inserted by the renderer around
         # inline roles. These backslash-space pairs are needed in RST to separate
@@ -146,14 +117,14 @@ class M2R2:
 
 
 def convert(
-    text,
+    text: str,
     *,
     no_underscore_emphasis: bool = False,
     disable_inline_math: bool = False,
     parse_relative_links: bool = False,
     anonymous_references: bool = False,
     use_mermaid: bool = False,
-):
+) -> str:
     """Convert a Markdown string to reStructuredText.
 
     Args:

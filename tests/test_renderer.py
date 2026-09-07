@@ -67,20 +67,52 @@ second paragraph."""
         self.assertEqual(out, "\n" + src + "\n")
 
     def test_hr(self):
-        src = "a\n\n---\n\nb"
+        src = """\
+a
+
+---
+
+b"""
         out = self.conv(src)
-        self.assertEqual(out, "\na\n\n----\n\nb\n")
+        self.assertEqual(
+            out,
+            """
+a
+
+----
+
+b
+""",
+        )
 
     def test_linebreak(self):
         src = "abc def  \nghi"
         out = self.conv(src)
         self.assertEqual(
             out,
-            PROLOG + "\nabc def\\ :raw-html-m2r:`<br>`\nghi" + "\n",
+            PROLOG
+            + """
+abc def\\ :raw-html-m2r:`<br>`
+ghi"""
+            + "\n",
         )
 
 
 class TestInlineMarkdown(RendererTestBase):
+    def test_link_adjacent_to_text(self):
+        self.assertEqual(
+            self.conv("prefix[link](https://example.com)suffix"),
+            "\nprefix\\ `link <https://example.com>`_\\ suffix\n",
+        )
+
+    def test_anonymous_link_adjacent_to_text(self):
+        self.assertEqual(
+            self.conv(
+                "prefix[link](https://example.com)suffix", anonymous_references=True
+            ),
+            "\nprefix\\ `link <https://example.com>`__\\ suffix\n",
+        )
+
     def test_inline_code(self):
         src = "`a`"
         out = self.conv(src)
@@ -91,10 +123,12 @@ class TestInlineMarkdown(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(
             out.strip(),
-            ".. role:: raw-html-m2r(raw)\n"
-            "   :format: html\n\n\n"
-            ':raw-html-m2r:`<code class="docutils literal">'
-            '<span class="pre">a&#96;&#96;a</span></code>`',
+            """\
+.. role:: raw-html-m2r(raw)
+   :format: html
+
+
+:raw-html-m2r:`<code class="docutils literal"><span class="pre">a&#96;&#96;a</span></code>`""",
         )
 
     def test_strikethrough(self):
@@ -180,16 +214,24 @@ class TestInlineMarkdown(RendererTestBase):
         out = self.conv(src)
         self.assertEqual(
             out,
-            ".. role:: raw-html-m2r(raw)\n"
-            "   :format: html\n\n\n"
-            "this is a :raw-html-m2r:"
-            '`<a href="http://example.com/" title="example">link</a>`.\n',
+            """\
+.. role:: raw-html-m2r(raw)
+   :format: html
+
+
+this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`.
+""",
         )
 
     def test_image_link(self):
         src = "[![Alt Text](image_target_url)](link_target_url)"
         out = self.conv(src)
-        expected = "\n.. image:: image_target_url\n   :target: link_target_url\n   :alt: Alt Text\n\n"
+        expected = """
+.. image:: image_target_url
+   :target: link_target_url
+   :alt: Alt Text
+
+"""
         self.assertEqual(out, expected)
 
     def test_rest_role(self):
@@ -293,11 +335,39 @@ class TestInlineMarkdown(RendererTestBase):
     def test_block_html(self):
         src = "<h1>title</h1>"
         out = self.conv(src)
-        self.assertEqual(out, "\n.. raw:: html\n\n   <h1>title</h1>\n\n")
+        self.assertEqual(
+            out,
+            """
+.. raw:: html
+
+   <h1>title</h1>
+
+""",
+        )
 
 
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
+
+    def test_nested_emphasis(self):
+        src = "*a [link](page) and `code`* _plain_"
+        expected = "\n*a* `link <page>`_ *and* ``code`` _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
+    def test_nested_strong(self):
+        src = "**a [link](page) and `code`** _plain_"
+        expected = "\n**a** `link <page>`_ **and** ``code`` _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
+    def test_nested_emphasis_after_text(self):
+        src = "prefix *a [link](page) and `code`* _plain_"
+        expected = "\nprefix *a* `link <page>`_ *and* ``code`` _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
+    def test_nested_strong_after_text(self):
+        src = "prefix **a [link](page) and `code`** _plain_"
+        expected = "\nprefix **a** `link <page>`_ **and** ``code`` _plain_\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
 
     def test_asterisk_emphasis(self):
         src = "*hello*"
@@ -329,21 +399,62 @@ class TestNoUnderscoreEmphasis(RendererTestBase):
 
 class TestBlockQuote(RendererTestBase):
     def test_block_quote(self):
-        src = "> q1\n> q2"
+        src = """\
+> q1
+> q2"""
         out = self.conv(src)
-        self.assertEqual(out, "\n..\n\n   q1\n   q2\n\n")
+        self.assertEqual(
+            out,
+            """
+..
+
+   q1
+   q2
+
+""",
+        )
 
     def test_block_quote_nested(self):
-        src = "> q1\n> > q2"
+        src = """\
+> q1
+> > q2"""
         out = self.conv(src)
         # one extra empty line is inserted, but still valid rst anyway
-        self.assertEqual(out, "\n..\n\n   q1\n\n   ..\n\n      q2\n\n")
+        self.assertEqual(
+            out,
+            """
+..
+
+   q1
+
+   ..
+
+      q2
+
+""",
+        )
 
     @skip("markdown does not support dedent in block quote")
     def test_block_quote_nested_2(self):
-        src = "> q1\n> > q2\n> q3"
+        src = """\
+> q1
+> > q2
+> q3"""
         out = self.conv(src)
-        self.assertEqual(out, "\n..\n\n   q1\n\n   ..\n      q2\n\n   q3\n\n")
+        self.assertEqual(
+            out,
+            """
+..
+
+   q1
+
+   ..
+      q2
+
+   q3
+
+""",
+        )
 
 
 class TestCodeBlock(RendererTestBase):
@@ -353,7 +464,7 @@ class TestCodeBlock(RendererTestBase):
 pip install sphinx
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
+        self.assertEqual(out, "\n::\n\n   pip install sphinx\n")
 
     def test_plain_code_block_tilda(self):
         src = """\
@@ -361,7 +472,7 @@ pip install sphinx
 pip install sphinx
 ~~~"""
         out = self.conv(src)
-        self.assertEqual(out, "\n.. code-block::\n\n   pip install sphinx\n")
+        self.assertEqual(out, "\n::\n\n   pip install sphinx\n")
 
     def test_code_block_math(self):
         src = """\
@@ -369,7 +480,14 @@ pip install sphinx
 E = mc^2
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n.. math::\n\n   E = mc^2\n")
+        self.assertEqual(
+            out,
+            """
+.. math::
+
+   E = mc^2
+""",
+        )
 
     def test_plain_code_block_indent(self):
         src = """\
@@ -378,10 +496,7 @@ pip install sphinx
     new line
 ```"""
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            "\n.. code-block::\n\n   pip install sphinx\n       new line\n",
-        )
+        self.assertEqual(out, "\n::\n\n   pip install sphinx\n       new line\n")
 
     def test_python_code_block(self):
         src = """\
@@ -389,7 +504,14 @@ pip install sphinx
 print(1)
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n.. code-block:: python\n\n   print(1)\n")
+        self.assertEqual(
+            out,
+            """
+.. code-block:: python
+
+   print(1)
+""",
+        )
 
     def test_python_code_block_indent(self):
         src = """\
@@ -400,7 +522,12 @@ def a(i):
         out = self.conv(src)
         self.assertEqual(
             out,
-            "\n.. code-block:: python\n\n   def a(i):\n       print(i)\n",
+            """
+.. code-block:: python
+
+   def a(i):
+       print(i)
+""",
         )
 
     def test_code_block_info_string_extra_text(self):
@@ -410,24 +537,227 @@ def a(i):
 print(1)
 ```"""
         out = self.conv(src)
-        self.assertEqual(out, "\n.. code-block:: python\n\n   print(1)\n")
+        self.assertEqual(
+            out,
+            """
+.. code-block:: python
+
+   print(1)
+""",
+        )
 
 
 class TestImage(RendererTestBase):
+    def test_image_destination_and_alt(self):
+        for source in [
+            '''\
+![alt][img]
+
+[img]: image.png "Title"''',
+            """\
+![alt][]
+
+[alt]: image.png""",
+            """\
+![alt]
+
+[alt]: image.png""",
+            '![alt](image.png "Title")',
+            "![alt](image.png 'Title')",
+        ]:
+            with self.subTest(source=source):
+                expected = """
+.. image:: image.png
+   :target: image.png
+   :alt: alt
+
+"""
+                self.assertEqual(self.conv(source), expected)
+
+    def test_standalone_image(self):
+        source = """\
+![A](a.png)
+
+* ![A](a.png)
+
+> ![A](a.png)
+"""
+        expected = """
+.. image:: a.png
+   :target: a.png
+   :alt: A
+
+
+* .. image:: a.png
+     :target: a.png
+     :alt: A
+
+..
+
+   .. image:: a.png
+      :target: a.png
+      :alt: A
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_standalone_linked_image(self):
+        source = """\
+[![A](a.png)](page.html)
+
+* [![A](a.png)](page.html)
+
+> [![A](a.png)](page.html)
+"""
+        expected = """
+.. image:: a.png
+   :target: page.html
+   :alt: A
+
+
+* .. image:: a.png
+     :target: page.html
+     :alt: A
+
+..
+
+   .. image:: a.png
+      :target: page.html
+      :alt: A
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_standalone_reference_image(self):
+        source = """\
+![A][img]
+
+* ![A][img]
+
+> ![A][img]
+
+[img]: a.png
+"""
+        expected = """
+.. image:: a.png
+   :target: a.png
+   :alt: A
+
+
+* .. image:: a.png
+     :target: a.png
+     :alt: A
+
+..
+
+   .. image:: a.png
+      :target: a.png
+      :alt: A
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_standalone_linked_reference_image(self):
+        source = """\
+[![A][img]](page.html)
+
+* [![A][img]](page.html)
+
+> [![A][img]](page.html)
+
+[img]: a.png
+"""
+        expected = """
+.. image:: a.png
+   :target: page.html
+   :alt: A
+
+
+* .. image:: a.png
+     :target: page.html
+     :alt: A
+
+..
+
+   .. image:: a.png
+      :target: page.html
+      :alt: A
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_inline_image(self):
+        source = """\
+# ![A](a.png)
+
+before ![A](a.png) after
+
+* before ![A](a.png) after
+"""
+        expected = """
+.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+   :target: a.png
+   :alt: A
+
+
+|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
+================================================================================
+
+before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+
+* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_inline_linked_image(self):
+        source = """\
+# [![A](a.png)](page.html)
+
+before [![A](a.png)](page.html) after
+
+* before [![A](a.png)](page.html) after
+"""
+        expected = """
+.. |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| image:: a.png
+   :target: page.html
+   :alt: A
+
+
+|m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed|
+================================================================================
+
+before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+
+* before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+"""
+        self.assertEqual(self.conv(source), expected)
+
     def test_image(self):
         src = "![alt text](a.png)"
         out = self.conv(src)
         self.assertEqual(
             out,
-            "\n.. image:: a.png\n   :target: a.png\n   :alt: alt text\n\n",
+            """
+.. image:: a.png
+   :target: a.png
+   :alt: alt text
+
+""",
         )
 
     def test_image_title(self):
         src = '![alt text](a.png "title")'
         out = self.conv(src)
         # title is not supported by RST image directive, but image should still render
-        self.assertIn(".. image:: a.png", out)
-        self.assertIn(":alt: alt text", out)
+        self.assertEqual(
+            out,
+            """
+.. image:: a.png
+   :target: a.png
+   :alt: alt text
+
+""",
+        )
 
 
 class TestHeading(RendererTestBase):
@@ -468,6 +798,119 @@ class TestHeading(RendererTestBase):
 
 
 class TestList(RendererTestBase):
+    def test_unordered_list_item_preserves_blocks(self):
+        source = """\
+* first paragraph
+
+  second paragraph
+
+  ```python
+  print(1)
+  ```
+"""
+        expected = """
+* first paragraph
+
+  second paragraph
+
+  .. code-block:: python
+
+     print(1)
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_ordered_list_item_preserves_blocks(self):
+        source = """\
+1. first paragraph
+
+   second paragraph
+
+   ```python
+   print(1)
+   ```
+"""
+        expected = """
+#. first paragraph
+
+   second paragraph
+
+   .. code-block:: python
+
+      print(1)
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_wide_ordered_list_item_preserves_blocks(self):
+        source = """\
+10. first paragraph
+
+    second paragraph
+
+    ```python
+    print(1)
+    ```
+"""
+        expected = """
+#. first paragraph
+
+   second paragraph
+
+   .. code-block:: python
+
+      print(1)
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_list_preserves_content_after_nested_list(self):
+        source = """\
+* parent
+
+  * child
+
+  after child
+
+* next"""
+        expected = """
+* parent
+
+  * child
+
+  after child
+
+* next
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_list_preserves_lazy_continuation(self):
+        source = """\
+* first
+continued
+
+outside"""
+        expected = """
+* first
+  continued
+
+outside
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_thematic_break_after_list(self):
+        source = """\
+* item
+
+* * *
+
+after"""
+        expected = """
+* item
+
+----
+
+after
+"""
+        self.assertEqual(self.conv(source), expected)
+
     def test_ul(self):
         src = "* list"
         out = self.conv(src)
@@ -725,12 +1168,127 @@ end
         out = self.conv(src)
         self.assertIn(".. code-block:: python", out)
         self.assertIn("print(1)", out)
-        self.assertIn("title\n=====", out)
+        self.assertIn(
+            """\
+title
+=====""",
+            out,
+        )
         self.assertIn("----", out)
         self.assertIn("end", out)
 
 
 class TestTable(RendererTestBase):
+    def test_issue_75_table_images(self):
+        source = """\
+| A | B |
+|---|---|
+| ![A](a.png) | ![B](b.png) |
+"""
+        expected = """
+.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+   :target: a.png
+   :alt: A
+
+.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+   :target: b.png
+   :alt: B
+
+
+.. list-table::
+   :header-rows: 1
+
+   * - A
+     - B
+   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
+     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_issue_75_table_mixed_image(self):
+        source = """\
+| A | B |
+|---|---|
+| before ![A](a.png) after | ![B](b.png) |
+"""
+        expected = """
+.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+   :target: a.png
+   :alt: A
+
+.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+   :target: b.png
+   :alt: B
+
+
+.. list-table::
+   :header-rows: 1
+
+   * - A
+     - B
+   * - before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_issue_75_table_linked_image(self):
+        source = """\
+| A | B |
+|---|---|
+| [![A](a.png)](https://example.com) | ![B](b.png) |
+"""
+        expected = """
+.. |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016| image:: a.png
+   :target: https://example.com
+   :alt: A
+
+.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+   :target: b.png
+   :alt: B
+
+
+.. list-table::
+   :header-rows: 1
+
+   * - A
+     - B
+   * - |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016|\\
+     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
+    def test_issue_75_table_reference_image(self):
+        source = """\
+| A | B |
+|---|---|
+| ![A][img] | ![B](b.png) |
+
+[img]: a.png
+"""
+        expected = """
+.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+   :target: a.png
+   :alt: A
+
+.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+   :target: b.png
+   :alt: B
+
+
+.. list-table::
+   :header-rows: 1
+
+   * - A
+     - B
+   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
+     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+
+"""
+        self.assertEqual(self.conv(source), expected)
+
     def test_table(self):
         src = """\
 h1 | h2 | h3
@@ -789,7 +1347,10 @@ This has a[^MyRef] footnote.
         self.assertIn(".. [#fn-myref]", out)
 
     def test_sphinx_ref(self):
-        src = "This is a sphinx [ref]_ global ref.\n\n.. [ref] ref text"
+        src = """\
+This is a sphinx [ref]_ global ref.
+
+.. [ref] ref text"""
         out = self.conv(src)
         self.assertEqual(out, "\n" + src)
 
@@ -806,19 +1367,34 @@ class TestDirective(RendererTestBase):
         self.assertEqual(out, "\n    .. a")
 
     def test_comment_newline(self):
-        src = "..\n\n   comment\n\nnewline"
+        src = """\
+..
+
+   comment
+
+newline"""
         out = self.conv(src)
-        self.assertEqual(out, "\n..\n\n   comment\n\nnewline\n")
+        self.assertEqual(
+            out,
+            """
+..
+
+   comment
+
+newline
+""",
+        )
 
     def test_comment_multiline(self):
-        comment = (
-            ".. this is comment.\n"
-            "   this is also comment.\n"
-            "\n"
-            "\n"
-            "    comment may include empty line.\n"
-            "\n\n"
-        )
+        comment = """\
+.. this is comment.
+   this is also comment.
+
+
+    comment may include empty line.
+
+
+"""
         src = comment + "`eoc`"
         out = self.conv(src)
         self.assertEqual(out, "\n" + comment + "``eoc``\n")
@@ -831,14 +1407,40 @@ class TestRestCode(RendererTestBase):
         self.assertEqual(out, "\n")
 
     def test_eol_marker(self):
-        src = "a::\n\n    code\n"
+        src = """\
+a::
+
+    code
+"""
         out = self.conv(src)
-        self.assertEqual(out, "\na:\n\n.. code-block::\n\n   code\n")
+        self.assertEqual(
+            out,
+            """
+a:
+
+::
+
+   code
+""",
+        )
 
     def test_eol_marker_remove(self):
-        src = "a ::\n\n    code\n"
+        src = """\
+a ::
+
+    code
+"""
         out = self.conv(src)
-        self.assertEqual(out, "\na\n\n.. code-block::\n\n   code\n")
+        self.assertEqual(
+            out,
+            """
+a
+
+::
+
+   code
+""",
+        )
 
 
 class TestMermaid(RendererTestBase):
@@ -850,7 +1452,15 @@ graph TD
 ```"""
         # conv_no_check: docutils doesn't know the mermaid directive
         out = self.conv_no_check(src, use_mermaid=True)
-        self.assertEqual(out, "\n.. mermaid::\n\n   graph TD\n       A --> B\n")
+        self.assertEqual(
+            out,
+            """
+.. mermaid::
+
+   graph TD
+       A --> B
+""",
+        )
 
     def test_mermaid_disabled(self):
         src = """\
@@ -861,7 +1471,13 @@ graph TD
         # conv_no_check: Pygments has no mermaid lexer
         out = self.conv_no_check(src)
         self.assertEqual(
-            out, "\n.. code-block:: mermaid\n\n   graph TD\n       A --> B\n"
+            out,
+            """
+.. code-block:: mermaid
+
+   graph TD
+       A --> B
+""",
         )
 
 
@@ -905,9 +1521,37 @@ class TestInstanceReuse(RendererTestBase):
     """Verify that converting multiple documents via a single M2R2 instance
     does not leak state between calls."""
 
+    def test_inline_image_definitions_do_not_leak_between_calls(self):
+        converter = M2R2()
+        source = """\
+# ![A](a.png)
+
+before ![A](a.png) after
+
+* before ![A](a.png) after
+"""
+        expected = """
+.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+   :target: a.png
+   :alt: A
+
+
+|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
+================================================================================
+
+before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+
+* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+"""
+        self.assertEqual(converter(source), expected)
+        self.assertEqual(converter("plain text"), "\nplain text\n")
+
     def test_list_state_does_not_leak(self):
         converter = M2R2()
-        out1 = converter("* item a\n* item b\n")
+        out1 = converter("""\
+* item a
+* item b
+""")
         self.assertIn("* item a", out1)
         out2 = converter("plain paragraph\n")
         # The second document should be a plain paragraph with no list markers
@@ -916,7 +1560,11 @@ class TestInstanceReuse(RendererTestBase):
 
     def test_table_then_paragraph(self):
         converter = M2R2()
-        out1 = converter("h1 | h2\n--- | ---\n1 | 2\n")
+        out1 = converter("""\
+h1 | h2
+--- | ---
+1 | 2
+""")
         self.assertIn("list-table", out1)
         out2 = converter("just text\n")
         self.assertNotIn("list-table", out2)
@@ -924,7 +1572,11 @@ class TestInstanceReuse(RendererTestBase):
 
     def test_footnote_then_plain(self):
         converter = M2R2()
-        out1 = converter("Text[^1].\n\n[^1]: note\n")
+        out1 = converter("""\
+Text[^1].
+
+[^1]: note
+""")
         self.assertIn("[#fn-1]", out1)
         out2 = converter("no footnotes here\n")
         self.assertNotIn("[#fn", out2)

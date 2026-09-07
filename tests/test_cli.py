@@ -183,7 +183,12 @@ class TestConvert(TestCase):
     def test_use_mermaid_option(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             md = Path(tmpdir) / "merm.md"
-            md.write_text("```mermaid\ngraph TD\n    A --> B\n```\n")
+            md.write_text("""\
+```mermaid
+graph TD
+    A --> B
+```
+""")
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 main(["--use-mermaid", "--dry-run", str(md)])

@@ -32,7 +32,10 @@ def _build(conf="", files=None):
     srcdir = Path(tmpdir) / "src"
     srcdir.mkdir()
 
-    conf_text = f'extensions = ["m2r2"]\n{conf}\n'
+    conf_text = f"""\
+extensions = ["m2r2"]
+{conf}
+"""
     (srcdir / "conf.py").write_text(conf_text)
 
     for name, content in files.items():
@@ -99,7 +102,13 @@ class TestSetup(SphinxTestBase):
             warnings.simplefilter("always")
             _, outdir, _ = self.build(
                 conf="no_underscore_emphasis = True",
-                files={"index.md": "# Test\n\n_underscored_ text\n"},
+                files={
+                    "index.md": """\
+# Test
+
+_underscored_ text
+"""
+                },
             )
         deprecation_msgs = [x for x in w if issubclass(x.category, DeprecationWarning)]
         self.assertTrue(
@@ -108,12 +117,38 @@ class TestSetup(SphinxTestBase):
         html = (outdir / "index.html").read_text()
         self.assertIn("_underscored_", html)
 
+    def test_explicit_new_config_takes_precedence(self):
+        """Honor an explicit False even when the deprecated option is True."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _, outdir, _ = self.build(
+                conf="""\
+no_underscore_emphasis = True
+m2r_no_underscore_emphasis = False""",
+                files={
+                    "index.md": """\
+# Test
+
+_underscored_ text
+"""
+                },
+            )
+        self.assertIn("<em>underscored</em>", (outdir / "index.html").read_text())
+
 
 class TestM2R2Parser(SphinxTestBase):
     """Test M2R2Parser as a Sphinx source parser."""
 
     def test_basic_markdown_build(self):
-        _, outdir, _ = self.build(files={"index.md": "# Hello World\n\nA paragraph.\n"})
+        _, outdir, _ = self.build(
+            files={
+                "index.md": """\
+# Hello World
+
+A paragraph.
+"""
+            }
+        )
         html = (outdir / "index.html").read_text()
         self.assertIn("Hello World", html)
         self.assertIn("A paragraph", html)
@@ -121,7 +156,13 @@ class TestM2R2Parser(SphinxTestBase):
     def test_no_underscore_emphasis_config(self):
         _, outdir, _ = self.build(
             conf="m2r_no_underscore_emphasis = True",
-            files={"index.md": "# Test\n\n_underscored_ text\n"},
+            files={
+                "index.md": """\
+# Test
+
+_underscored_ text
+"""
+            },
         )
         html = (outdir / "index.html").read_text()
         self.assertIn("_underscored_", html)
@@ -129,21 +170,41 @@ class TestM2R2Parser(SphinxTestBase):
     def test_anonymous_references_config(self):
         _, outdir, _ = self.build(
             conf="m2r_anonymous_references = True",
-            files={"index.md": "# Test\n\n[link](http://example.com)\n"},
+            files={
+                "index.md": """\
+# Test
+
+[link](http://example.com)
+"""
+            },
         )
         html = (outdir / "index.html").read_text()
         self.assertIn("http://example.com", html)
 
     def test_inline_html_renders(self):
         _, outdir, _ = self.build(
-            files={"index.md": "# Test\n\ntext <b>bold</b> text\n"}
+            files={
+                "index.md": """\
+# Test
+
+text <b>bold</b> text
+"""
+            }
         )
         html = (outdir / "index.html").read_text()
         self.assertIn("<b>bold</b>", html)
 
     def test_code_block(self):
         _, outdir, _ = self.build(
-            files={"index.md": "# Test\n\n```python\nprint('hello')\n```\n"}
+            files={
+                "index.md": """\
+# Test
+
+```python
+print('hello')
+```
+"""
+            }
         )
         html = (outdir / "index.html").read_text()
         self.assertIn("print", html)
@@ -153,9 +214,21 @@ class TestM2R2Parser(SphinxTestBase):
         _, outdir, _ = self.build(
             files={
                 "index.md": (
-                    "# Index\n\ntext <b>bold</b> text\n\n```{toctree}\ndoc2\n```\n"
+                    """\
+# Index
+
+text <b>bold</b> text
+
+```{toctree}
+doc2
+```
+"""
                 ),
-                "doc2.md": "# Doc 2\n\nPlain text only.\n",
+                "doc2.md": """\
+# Doc 2
+
+Plain text only.
+""",
             }
         )
         html1 = (outdir / "index.html").read_text()
@@ -169,11 +242,66 @@ class TestM2R2Parser(SphinxTestBase):
 class TestMdInclude(SphinxTestBase):
     """Test the mdinclude directive."""
 
+    def test_repeated_image_in_included_tables(self):
+        """Render repeated image substitutions across included documents."""
+        table = """\
+| A | B |
+|---|---|
+| before ![A](https://example.com/a.png) after | B |
+"""
+        _, outdir, build_warnings = self.build(
+            files={
+                "index.rst": """\
+Test
+====
+
+.. mdinclude:: first.txt
+
+.. mdinclude:: second.txt
+
+.. mdinclude:: first.txt
+""",
+                "first.txt": table,
+                "second.txt": table,
+            }
+        )
+        self.assertEqual(build_warnings, "")
+        html = (outdir / "index.html").read_text()
+        self.assertEqual(html.count('src="https://example.com/a.png"'), 3)
+
+    def test_image_shared_by_markdown_source_and_include(self):
+        """Reuse image definitions from the including Markdown document."""
+        image = "before ![A](https://example.com/a.png) after\n"
+        _, outdir, build_warnings = self.build(
+            files={
+                "index.md": """\
+# Test
+
+.. mdinclude:: image.txt
+
+"""
+                + image,
+                "image.txt": image,
+            }
+        )
+        self.assertEqual(build_warnings, "")
+        html = (outdir / "index.html").read_text()
+        self.assertEqual(html.count('src="https://example.com/a.png"'), 2)
+
     def test_basic_include(self):
         _, outdir, _ = self.build(
             files={
-                "index.rst": "Test\n====\n\n.. mdinclude:: included.md\n",
-                "included.md": "## Included Section\n\nIncluded content.\n",
+                "index.rst": """\
+Test
+====
+
+.. mdinclude:: included.md
+""",
+                "included.md": """\
+## Included Section
+
+Included content.
+""",
             }
         )
         html = (outdir / "index.html").read_text()
@@ -185,12 +313,22 @@ class TestMdInclude(SphinxTestBase):
         _, outdir, _ = self.build(
             files={
                 "index.rst": (
-                    "Test\n====\n\n"
-                    ".. mdinclude:: included.md\n"
-                    "   :start-line: 0\n"
-                    "   :end-line: 2\n"
+                    """\
+Test
+====
+
+.. mdinclude:: included.md
+   :start-line: 0
+   :end-line: 2
+"""
                 ),
-                "included.md": "line0\n\nline2\n\nline4\n",
+                "included.md": """\
+line0
+
+line2
+
+line4
+""",
             }
         )
         html = (outdir / "index.html").read_text()
@@ -201,9 +339,19 @@ class TestMdInclude(SphinxTestBase):
         _, outdir, _ = self.build(
             files={
                 "index.rst": (
-                    "Test\n====\n\n.. mdinclude:: included.md\n   :end-line: 1\n"
+                    """\
+Test
+====
+
+.. mdinclude:: included.md
+   :end-line: 1
+"""
                 ),
-                "included.md": "first\n\nsecond\n",
+                "included.md": """\
+first
+
+second
+""",
             }
         )
         html = (outdir / "index.html").read_text()
@@ -214,9 +362,19 @@ class TestMdInclude(SphinxTestBase):
         _, outdir, _ = self.build(
             files={
                 "index.rst": (
-                    "Test\n====\n\n.. mdinclude:: included.md\n   :start-line: 2\n"
+                    """\
+Test
+====
+
+.. mdinclude:: included.md
+   :start-line: 2
+"""
                 ),
-                "included.md": "first\n\nsecond\n",
+                "included.md": """\
+first
+
+second
+""",
             }
         )
         html = (outdir / "index.html").read_text()
@@ -228,7 +386,12 @@ class TestMdInclude(SphinxTestBase):
         _, outdir, _ = self.build(
             conf="m2r_no_underscore_emphasis = True",
             files={
-                "index.rst": "Test\n====\n\n.. mdinclude:: included.md\n",
+                "index.rst": """\
+Test
+====
+
+.. mdinclude:: included.md
+""",
                 "included.md": "_underscored_\n",
             },
         )

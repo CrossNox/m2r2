@@ -95,6 +95,20 @@ from m2r2 import parse_from_file
 output = parse_from_file('markdown_file.md')
 ```
 
+### Upgrading to 1.0
+
+The reusable converter class is named `M2R2`. Existing imports of `M2R` still
+work through an alias. The `convert` and `parse_from_file` functions remain available.
+
+Generated RST may use different spacing while preserving document content and
+structure. Standalone images keep block image directives. Images within text,
+headings, and table cells use substitutions so they can appear inline.
+RST cannot nest inline markup, so emphasis is applied to surrounding text
+while nested links and code retain their own formatting.
+
+In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
+`no_underscore_emphasis`. The old name still works with a deprecation warning.
+
 ### Sphinx Integration
 
 In your conf.py, add the following lines.
