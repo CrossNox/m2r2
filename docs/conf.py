@@ -1,7 +1,5 @@
 from m2r2 import __version__ as __m2r2_version__
 
-# -- General configuration ------------------------------------------------
-
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.mathjax",
@@ -16,14 +14,10 @@ source_suffix = [".rst", ".md"]
 master_doc = "index"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-# -- m2r2 configuration --------------------------------------------------
-
 m2r_no_underscore_emphasis = True
 m2r_parse_relative_links = True
 m2r_anonymous_references = False
 m2r_disable_inline_math = False
-
-# -- Project information --------------------------------------------------
 
 project = "M2R2"
 copyright = "2026, CrossNox"
@@ -31,8 +25,6 @@ author = "CrossNox"
 version = __m2r2_version__
 release = __m2r2_version__
 language = "en"
-
-# -- Options for HTML output ----------------------------------------------
 
 html_theme = "alabaster"
 html_theme_options = {

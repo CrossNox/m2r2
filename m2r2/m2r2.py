@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import re
-from importlib.metadata import PackageNotFoundError, version
-from typing import cast
+from collections.abc import Iterable
+from importlib.metadata import version
+from typing import TYPE_CHECKING, cast
 
 import mistune
+from mistune.core import BaseRenderer
 from mistune.plugins.footnotes import footnotes
 from mistune.plugins.formatting import strikethrough
 from mistune.plugins.table import table
@@ -10,10 +14,10 @@ from mistune.plugins.table import table
 from m2r2.rst.plugins import rst_directives
 from m2r2.rst.renderer import RestRenderer
 
-try:
-    __version__ = version("m2r2")
-except PackageNotFoundError:
-    __version__ = "0.0.0.dev0"
+if TYPE_CHECKING:
+    from mistune.plugins import Plugin
+
+__version__ = version("m2r2")
 
 # Keep Mistune's recursive emphasis parser, restricting only its start marker.
 _ASTERISK_EMPHASIS = r"\*{1,3}(?=[^\s*])"
@@ -41,8 +45,8 @@ class M2R2:
 
     def __init__(
         self,
-        renderer=None,
-        plugins=None,
+        renderer: BaseRenderer | None = None,
+        plugins: Iterable[str | Plugin] | None = None,
         *,
         no_underscore_emphasis: bool = False,
         disable_inline_math: bool = False,
@@ -56,6 +60,7 @@ class M2R2:
                 anonymous_references=anonymous_references,
                 use_mermaid=use_mermaid,
             )
+        self.renderer = renderer
 
         if plugins is None:
             plugins = []
@@ -70,15 +75,10 @@ class M2R2:
             if no_underscore_emphasis:
                 md.inline.specification["emphasis"] = _ASTERISK_EMPHASIS
 
-        # Add RST directive plugin function
-        plugins.append(custom_rst_directives)
-
-        # Add table, footnote, and strikethrough support
-        plugins.extend([table, footnotes, strikethrough])
+        plugins.extend([custom_rst_directives, table, footnotes, strikethrough])
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=renderer, plugins=plugins)
-        self.renderer = renderer
 
     def parse(self, s: str) -> str:
         """Convert one Markdown document to RST."""

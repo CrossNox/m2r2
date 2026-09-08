@@ -1,7 +1,7 @@
 [project]
 name = "m2r2"
 version = "1.0.0"
-description = "Markdown and reStructuredText in a single file."
+description = "Markdown to RST converter."
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "CrossNox", email = "ijmermet+m2r2@gmail.com" }]

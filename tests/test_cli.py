@@ -28,8 +28,6 @@ class TestConvert(TestCase):
         md.write_text(test_md.read_text())
         return md, tmpdir / "test.rst"
 
-    # -- argument handling ---------------------------------------------------
-
     def test_no_file(self):
         p = subprocess.Popen(
             [sys.executable, "-m", "m2r2"],
@@ -64,8 +62,6 @@ class TestConvert(TestCase):
         output = stderr.getvalue()
         self.assertIn("missing_a.md", output)
         self.assertIn("missing_b.md", output)
-
-    # -- conversion ----------------------------------------------------------
 
     def test_parse_file(self):
         output = parse_from_file(test_md)
@@ -147,8 +143,6 @@ class TestConvert(TestCase):
             self.assertEqual(rst.read_text(), "original")
             self.assertIn("--overwrite", stderr.getvalue())
 
-    # -- option flags --------------------------------------------------------
-
     def test_underscore_option(self):
         stdout = StringIO()
         with patch("sys.stdout", stdout):
@@ -203,8 +197,6 @@ graph TD
         self.assertEqual(p.returncode, 0)
         self.assertRegex(p.stdout.strip(), r"^m2r2 \d+\.\d+\.\d+")
 
-    # -- multiple files ------------------------------------------------------
-
     def test_multiple_input_files(self):
         """Passing multiple files should convert each one."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -222,8 +214,6 @@ graph TD
             self.assertTrue(rst2.exists())
             self.assertIn("File A", rst1.read_text())
             self.assertIn("File B", rst2.read_text())
-
-    # -- subprocess integration ----------------------------------------------
 
     def test_subprocess_convert(self):
         """Integration test: convert a file via ``python -m m2r2 --dry-run``."""

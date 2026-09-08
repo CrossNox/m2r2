@@ -153,7 +153,7 @@ def run_m2r2(args: argparse.Namespace) -> None:
     """
     # Validate all input files exist before processing any
     missing = [f for f in args.input_files if not f.exists()]
-    if missing:
+    if len(missing) > 0:
         for f in missing:
             print(f"Error: No such file exists: {f}", file=sys.stderr)
         sys.exit(1)

@@ -11,7 +11,7 @@ M2R2 converts a markdown file including reStructuredText (rst) markups to a vali
 
 ## M2R: the original
 
-M2R2 is a fork of [m2r](https://github.com/miyakogi/m2r) which hasn't been updated for a long time and there's been no response from the author about a PR fixing a serious issue that broke several pipelines using `sphinx3`. Every `m2r` config should work out of the box.
+M2R2 is a fork of [m2r](https://github.com/miyakogi/m2r) which has been archived. Every `m2r` config should work out of the box.
 
 ## Why another converter?
 
