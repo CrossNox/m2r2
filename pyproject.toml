@@ -1,0 +1,100 @@
+[project]
+name = "m2r2"
+version = "1.0.0"
+description = "Markdown to RST converter."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "CrossNox", email = "ijmermet+m2r2@gmail.com" }]
+requires-python = ">=3.9"
+keywords = ["markdown", "rst", "restructuredtext", "sphinx", "converter"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Documentation",
+  "Topic :: Documentation :: Sphinx",
+  "Topic :: Text Processing :: Markup",
+  "Topic :: Text Processing :: Markup :: Markdown",
+  "Topic :: Text Processing :: Markup :: reStructuredText",
+]
+dependencies = ["mistune>=3.0", "docutils>=0.19"]
+
+[project.optional-dependencies]
+sphinx = ["sphinx>=1.7.0"]
+
+[project.scripts]
+m2r2 = "m2r2.cli.m2r2:main"
+
+[project.urls]
+Homepage = "https://github.com/crossnox/m2r2"
+Repository = "https://github.com/crossnox/m2r2"
+Documentation = "https://crossnox.github.io/m2r2"
+Issues = "https://github.com/crossnox/m2r2/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+  "pygments>=2.18.0",
+  "mypy>=1.11.0",
+  "ruff>=0.5.5",
+  "bandit>=1.7.9",
+  "types-docutils>=0.21.0",
+  "pre-commit>=4.3.0",
+]
+test = ["pytest>=8.3.2", "pytest-cov>=5.0.0", "sphinx>=7.4.7"]
+
+[tool.uv]
+default-groups = ["dev", "test"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "RUF", # ruff-specific
+]
+ignore = [
+  "E501", # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["m2r2"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+
+[tool.mypy]
+python_version = "3.9"
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "mistune.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["m2r2"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
