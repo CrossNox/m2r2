@@ -74,12 +74,17 @@ class TestConvert(TestCase):
             md, rst = self._copy_to_tmp(Path(tmpdir))
             self.assertFalse(rst.exists())
             stdout = StringIO()
-            with patch("sys.stdout", stdout):
+            stderr = StringIO()
+            with (
+                patch("sys.stdout", stdout),
+                patch("sys.stderr", stderr),
+            ):
                 main(["--dry-run", str(md)])
             self.assertFalse(rst.exists())
             expected = test_rst.read_text()
             # --dry-run adds a trailing newline via print()
-            self.assertEqual(stdout.getvalue().strip(), expected.strip())
+            self.assertEqual(stdout.getvalue(), expected + "\n")
+            self.assertEqual(stderr.getvalue(), "")
 
     def test_write_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -106,10 +111,18 @@ class TestConvert(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             md, rst = self._copy_to_tmp(Path(tmpdir))
             rst.write_text("test")
-            with patch("builtins.input", return_value="y") as m_input:
+            stdout = StringIO()
+            stderr = StringIO()
+            with (
+                patch("builtins.input", return_value="y") as m_input,
+                patch("sys.stdout", stdout),
+                patch("sys.stderr", stderr),
+            ):
                 main(["--overwrite", str(md)])
             self.assertTrue(rst.exists())
             self.assertFalse(m_input.called)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(stderr.getvalue(), "")
             first_line = rst.read_text().splitlines()[0]
             self.assertNotIn("test", first_line)
 

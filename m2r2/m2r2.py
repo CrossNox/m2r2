@@ -11,7 +11,7 @@ from mistune.plugins.footnotes import footnotes
 from mistune.plugins.formatting import strikethrough
 from mistune.plugins.table import table
 
-from m2r2.rst.plugins import rst_directives
+from m2r2.rst.plugins import configure_markdown_parser_for_rst
 from m2r2.rst.renderer import RestRenderer
 
 if TYPE_CHECKING:
@@ -69,7 +69,7 @@ class M2R2:
 
         # Create custom plugin function that respects options
         def custom_rst_directives(md):
-            rst_directives(md)
+            configure_markdown_parser_for_rst(md)
             if disable_inline_math and "inline_math" in md.inline.rules:
                 md.inline.rules.remove("inline_math")
             if no_underscore_emphasis:
