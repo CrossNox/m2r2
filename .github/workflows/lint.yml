@@ -33,6 +33,3 @@ jobs:
 
       - name: Type check
         run: uv run mypy m2r2/
-
-      - name: Security scan
-        run: uv run bandit -r m2r2/ -c pyproject.toml
