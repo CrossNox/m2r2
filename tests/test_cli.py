@@ -22,7 +22,7 @@ class TestConvert(TestCase):
     ``tests/test.rst`` fixture is never mutated.
     """
 
-    def _copy_to_tmp(self, tmpdir: Path) -> tuple[Path, Path]:
+    def _copy_test_file_to_tmp(self, tmpdir: Path) -> tuple[Path, Path]:
         """Copy test.md into *tmpdir* and return (md_path, expected_rst_path)."""
         md = tmpdir / "test.md"
         md.write_text(test_md.read_text())
@@ -40,6 +40,29 @@ class TestConvert(TestCase):
         message = p.stderr.read().decode()
         self.assertIn("usage", message)
         self.assertIn("required: FILE", message)
+
+    def test_help_flag(self):
+        p = subprocess.run(
+            [sys.executable, "-m", "m2r2", "--help"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(p.returncode, 0, msg=p.stderr)
+        self.assertIn("usage", p.stdout)
+
+        options = [
+            "--version",
+            "--overwrite",
+            "--dry-run",
+            "--no-underscore-emphasis",
+            "--parse-relative-links",
+            "--anonymous-references",
+            "--disable-inline-math",
+            "--use-mermaid",
+        ]
+        for option in options:
+            with self.subTest(option=option):
+                self.assertIn(option, p.stdout)
 
     def test_missing_file_via_main(self):
         """Missing files are reported to stderr and cause exit code 1."""
@@ -71,7 +94,7 @@ class TestConvert(TestCase):
     def test_dryrun(self):
         """--dry-run prints to stdout and does not write a file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             self.assertFalse(rst.exists())
             stdout = StringIO()
             stderr = StringIO()
@@ -88,14 +111,14 @@ class TestConvert(TestCase):
 
     def test_write_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             self.assertFalse(rst.exists())
             main([str(md)])
             self.assertTrue(rst.exists())
 
     def test_overwrite_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             rst.write_text("test")
             with (
                 patch("sys.stdin") as mock_stdin,
@@ -109,7 +132,7 @@ class TestConvert(TestCase):
 
     def test_overwrite_option(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             rst.write_text("test")
             stdout = StringIO()
             stderr = StringIO()
@@ -128,7 +151,7 @@ class TestConvert(TestCase):
 
     def test_decline_overwrite(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             rst.write_text("original")
             stderr = StringIO()
             with (
@@ -144,7 +167,7 @@ class TestConvert(TestCase):
     def test_non_interactive_skip(self):
         """Non-interactive mode skips with a warning to stderr."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            md, rst = self._copy_to_tmp(Path(tmpdir))
+            md, rst = self._copy_test_file_to_tmp(Path(tmpdir))
             rst.write_text("original")
             stderr = StringIO()
             with (
