@@ -5,11 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>M2R2 &#8212; M2R2 1.0.1 documentation</title>
+    <title>M2R2 &#8212; M2R2 1.1.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=6351133d" />
-    <script src="_static/documentation_options.js?v=292eb321"></script>
+    <script src="_static/documentation_options.js?v=fc837d61"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -170,6 +170,16 @@ while nested links and code retain their own formatting.</p>
 <h4>mdinclude directive<a class="headerlink" href="#mdinclude-directive" title="Link to this heading">¶</a></h4>
 <p>Like <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">include::</span> <span class="pre">file</span></code> directive, <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">mdinclude::</span> <span class="pre">file</span></code> directive inserts markdown file at the line.</p>
 <p>Note: do not use <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">include::</span> <span class="pre">file</span></code> directive to include markdown file even if in the markdown file, please use <code class="docutils literal notranslate"><span class="pre">..</span> <span class="pre">mdinclude::</span> <span class="pre">file</span></code> instead.</p>
+</section>
+<section id="using-mdinclude-with-another-markdown-parser">
+<h4>Using mdinclude with another markdown parser<a class="headerlink" href="#using-mdinclude-with-another-markdown-parser" title="Link to this heading">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">m2r2</span></code> extension parses <code class="docutils literal notranslate"><span class="pre">.md</span></code> files, so Sphinx refuses to load it next to another extension that does the same, such as myst-parser. To keep the other parser for <code class="docutils literal notranslate"><span class="pre">.md</span></code> files and still use <code class="docutils literal notranslate"><span class="pre">mdinclude</span></code>, enable <code class="docutils literal notranslate"><span class="pre">m2r2.mdinclude</span></code> instead. It adds the <code class="docutils literal notranslate"><span class="pre">mdinclude</span></code> directive and the <code class="docutils literal notranslate"><span class="pre">m2r_*</span></code> config values, but no parser.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">extensions</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"myst_parser"</span><span class="p">,</span>
+    <span class="s2">"m2r2.mdinclude"</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+</div>
 </section>
 </section>
 </section>
