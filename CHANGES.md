@@ -1,3 +1,6 @@
+### Version 1.1.0 (2026-09-18)
+* Add the `m2r2.mdinclude` Sphinx extension. It provides the `mdinclude` directive and leaves `.md` files to another parser.
+
 ### Version 1.0.1 (2026-09-18)
 * Keep underscores literal under `no_underscore_emphasis` with Mistune 3.3's emphasis parser.
 * Keep `_` and `*` inside bare URLs and email addresses from being read as emphasis with Mistune 3.3.

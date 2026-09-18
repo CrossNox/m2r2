@@ -8,7 +8,10 @@ from pathlib import Path
 from unittest import TestCase
 
 from docutils import nodes
+from sphinx.errors import ExtensionError
 from sphinx.testing.util import SphinxTestApp
+
+from m2r2 import __version__
 
 
 class SphinxTestBase(TestCase):
@@ -68,8 +71,6 @@ class TestSetup(SphinxTestBase):
 
     def test_setup_return_value(self):
         """Verify setup() returns proper extension metadata."""
-        from m2r2 import __version__
-
         app, _, _ = self.build_html_project_with_m2r2(
             source_files_by_name={"index.md": "# Hello\n"}
         )
@@ -79,6 +80,36 @@ class TestSetup(SphinxTestBase):
         self.assertEqual(ext.version, __version__)
         self.assertTrue(ext.parallel_read_safe)
         self.assertTrue(ext.parallel_write_safe)
+
+    def test_mdinclude_extension_setup_return_value(self):
+        app, _, _ = self.build_html_project_with_m2r2(
+            extra_conf_py='extensions = ["m2r2.mdinclude"]',
+            source_files_by_name={"index.rst": "Hello\n=====\n"},
+        )
+        ext = app.extensions.get("m2r2.mdinclude")
+        self.assertIsNotNone(ext)
+        self.assertEqual(ext.version, __version__)
+        self.assertTrue(ext.parallel_read_safe)
+        self.assertTrue(ext.parallel_write_safe)
+
+    def test_m2r2_listed_with_mdinclude_extension(self):
+        """Parse `.md` pages and run mdinclude when both extensions are listed."""
+        app, _, warning = self.build_html_project_with_m2r2(
+            extra_conf_py='extensions = ["m2r2.mdinclude", "m2r2"]',
+            source_files_by_name={
+                "index.md": """\
+# Test
+
+.. mdinclude:: included.txt
+""",
+                "included.txt": "Some *included* text\n",
+            },
+        )
+        self.assertEqual(warning, "")
+
+        emphasis = list(app.env.get_doctree("index").findall(nodes.emphasis))
+        self.assertEqual(len(emphasis), 1)
+        self.assertEqual(emphasis[0].astext(), "included")
 
     def test_mermaid_auto_detect(self):
         """m2r_use_mermaid defaults to True when sphinxcontrib.mermaid is loaded."""
@@ -264,6 +295,70 @@ Plain text only.
         self.assertEqual(list(plain.findall(nodes.footnote)), [])
         self.assertEqual(list(plain.findall(nodes.substitution_definition)), [])
         self.assertEqual(list(plain.findall(nodes.image)), [])
+
+
+class TestAlongsideOtherMarkdownParser(SphinxTestBase):
+    """Test mdinclude in projects where another extension parses `.md` files."""
+
+    def build_project_with_extensions_in_order(
+        self, extensions: list[str]
+    ) -> tuple[SphinxTestApp, str]:
+        """Build a project that mdincludes Markdown and has a `.md` page.
+
+        Return the app and the warning log.
+        """
+        app, _, warning = self.build_html_project_with_m2r2(
+            extra_conf_py=f"extensions = {extensions!r}",
+            source_files_by_name={
+                "index.rst": """\
+Test
+====
+
+.. mdinclude:: included.txt
+
+.. toctree::
+
+   page
+""",
+                "included.txt": "Some *included* text\n",
+                "page.md": "Some *page* text\n",
+            },
+        )
+        return app, warning
+
+    def assert_mdinclude_converts_and_other_parser_reads_pages(
+        self, app: SphinxTestApp, warning: str
+    ):
+        """Check mdinclude output and that `.md` pages bypass m2r2."""
+        self.assertEqual(warning, "")
+
+        index = app.env.get_doctree("index")
+        emphasis = list(index.findall(nodes.emphasis))
+        self.assertEqual(len(emphasis), 1)
+        self.assertEqual(emphasis[0].astext(), "included")
+
+        page = app.env.get_doctree("page")
+        paragraphs = list(page.findall(nodes.paragraph))
+        self.assertEqual(len(paragraphs), 1)
+        self.assertEqual(paragraphs[0].astext(), "Some *page* text\n")
+
+    def test_other_parser_loaded_before_mdinclude_extension(self):
+        app, warning = self.build_project_with_extensions_in_order(
+            ["tests.markdown_parser_extension", "m2r2.mdinclude"]
+        )
+        self.assert_mdinclude_converts_and_other_parser_reads_pages(app, warning)
+
+    def test_other_parser_loaded_after_mdinclude_extension(self):
+        app, warning = self.build_project_with_extensions_in_order(
+            ["m2r2.mdinclude", "tests.markdown_parser_extension"]
+        )
+        self.assert_mdinclude_converts_and_other_parser_reads_pages(app, warning)
+
+    def test_m2r2_after_other_parser_suggests_mdinclude_extension(self):
+        with self.assertRaisesRegex(ExtensionError, "m2r2.mdinclude"):
+            self.build_project_with_extensions_in_order(
+                ["tests.markdown_parser_extension", "m2r2"]
+            )
 
 
 class TestMdInclude(SphinxTestBase):

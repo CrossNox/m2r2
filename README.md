@@ -133,6 +133,17 @@ Like `.. include:: file` directive, `.. mdinclude:: file` directive inserts mark
 
 Note: do not use `.. include:: file` directive to include markdown file even if in the markdown file, please use `.. mdinclude:: file` instead.
 
+#### Using mdinclude with another markdown parser
+
+The `m2r2` extension parses `.md` files, so Sphinx refuses to load it next to another extension that does the same, such as myst-parser. To keep the other parser for `.md` files and still use `mdinclude`, enable `m2r2.mdinclude` instead. It adds the `mdinclude` directive and the `m2r_*` config values, but no parser.
+
+```python
+extensions = [
+    "myst_parser",
+    "m2r2.mdinclude",
+]
+```
+
 ## Restrictions
 
 * In the rst's directives, markdown is not available. Please write in rst.
