@@ -54,6 +54,7 @@ test = [
   "pytest-cov>=5.0.0",
   "sphinx>=7.4.7",
   "pygments>=2.18.0",
+  "sphinxcontrib-mermaid>=1.2.3",
 ]
 
 [tool.uv]
