@@ -11,6 +11,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # mypy pulls in ast-serialize, which has no PyPy wheels and can't build on pypy3.10
+      UV_NO_GROUP: dev
     strategy:
       fail-fast: false
       matrix:
