@@ -123,6 +123,39 @@ class TestInlineMarkdown(RendererTestBase):
     def test_email_autolink(self):
         self.assertEqual(self.conv("<a@example.com>"), "\na@example.com\n")
 
+    def test_autolink_keeps_underscores_literal(self):
+        src = "<https://example.com/_static/a?q_=1>"
+        expected = "\nhttps://example.com/_static/a?q_=1\n"
+        self.assertEqual(self.conv(src), expected)
+
+    def test_autolink_keeps_underscores_literal_without_underscore_emphasis(self):
+        src = "<https://example.com/_static/a?q_=1>"
+        expected = "\nhttps://example.com/_static/a?q_=1\n"
+        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+
+    def test_autolink_underscore_does_not_pair_with_text(self):
+        src = """\
+<https://example.com/_static/a> holds the files_ here.
+
+.. _files: https://example.com/files"""
+        expected = """
+https://example.com/_static/a holds the files_ here.
+
+.. _files: https://example.com/files"""
+        self.assertEqual(self.conv(src), expected)
+
+    def test_autolink_keeps_asterisks_literal(self):
+        src = "<https://example.com/a*b*c>"
+        self.assertEqual(self.conv(src), "\nhttps://example.com/a*b*c\n")
+
+    def test_email_autolinks_keep_underscores_literal(self):
+        src = "<_a@example.com> and <b_@example.com>"
+        self.assertEqual(self.conv(src), "\n_a@example.com and b_@example.com\n")
+
+    def test_autolink_inside_emphasis(self):
+        src = "*see <https://example.com> now*"
+        self.assertEqual(self.conv(src), "\n*see https://example.com now*\n")
+
     def test_autolink_with_existing_target(self):
         src = """\
 <https://example.com>

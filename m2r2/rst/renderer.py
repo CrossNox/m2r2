@@ -195,6 +195,10 @@ class RestRenderer(RSTRenderer):
         marker = token.get("marker", "")
         return marker
 
+    def standalone_hyperlink(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render a bare URL or email address for docutils to recognize."""
+        return self.text(token, state)
+
     def link(self, token: dict[str, Any], state: BlockState) -> str:
         """Render a hyperlink or a Sphinx document reference."""
         link = token["attrs"]["url"]
@@ -346,7 +350,7 @@ class RestRenderer(RSTRenderer):
         parts = []
         text = ""
         for child in token["children"]:
-            if child["type"] in ("text", "softbreak"):
+            if child["type"] in ("text", "softbreak", "standalone_hyperlink"):
                 text += self.render_token(child, state)
             else:
                 parts.append(emphasize(text))

@@ -1,3 +1,8 @@
+### Version 1.0.1 (2026-09-18)
+* Keep underscores literal under `no_underscore_emphasis` with Mistune 3.3's emphasis parser.
+* Keep `_` and `*` inside bare URLs and email addresses from being read as emphasis with Mistune 3.3.
+* Render autolinks through a new `standalone_hyperlink` renderer method.
+
 ### Version 1.0.0 (2026-02-11)
 * Drop support for Python < 3.9.
 * Upgrade to Mistune 3.0+.

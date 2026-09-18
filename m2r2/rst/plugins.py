@@ -36,6 +36,7 @@ REST_LINK_PATTERN = r"`[^`]*?`_"
 RST_FOOTNOTE_REF_PATTERN = r"\[[#][^\]]+\]_"
 INLINE_MATH_PATTERN = r"`\$(?P<math>.*?)\$`"
 EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
+LITERAL_UNDERSCORE_PATTERN = r"_+"
 
 
 def parse_directive(block, match: Match[str], state: BlockState):
@@ -65,9 +66,13 @@ def parse_rst_literal_block_marker(block, match: Match[str], state: BlockState):
 def parse_autolink(inline, match: Match[str], state: InlineState):
     """Leave URL and email autolinking to RST, without creating named targets."""
     text = match.group(0)
-    if not state.in_link:
-        text = text[1:-1]
-    inline.process_text(text, state)
+    if state.in_link:
+        inline.process_text(text, state)
+        return match.end()
+
+    # A separate token type hides the address from Mistune's emphasis pass.
+    token = {"type": "standalone_hyperlink", "raw": text[1:-1]}
+    state.append_token(token)
     return match.end()
 
 
@@ -111,6 +116,12 @@ def parse_eol_literal_marker(inline, match: Match[str], state: InlineState):
     token = {"type": "eol_literal_marker", "marker": marker}
     state.append_token(token)
     return match.end()
+
+
+def parse_literal_underscore(inline, match: Match[str], state: InlineState):
+    """Keep an underscore run as literal text that never delimits emphasis."""
+    # The escape parser emits literal text, which Mistune's emphasis pass skips.
+    return inline.parse_escape(match, state)
 
 
 def parse_list_with_visual_indentation(

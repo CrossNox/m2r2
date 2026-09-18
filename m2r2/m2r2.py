@@ -11,17 +11,17 @@ from mistune.plugins.footnotes import footnotes
 from mistune.plugins.formatting import strikethrough
 from mistune.plugins.table import table
 
-from m2r2.rst.plugins import configure_markdown_parser_for_rst
+from m2r2.rst.plugins import (
+    LITERAL_UNDERSCORE_PATTERN,
+    configure_markdown_parser_for_rst,
+    parse_literal_underscore,
+)
 from m2r2.rst.renderer import RestRenderer
 
 if TYPE_CHECKING:
     from mistune.plugins import Plugin
 
 __version__ = version("m2r2")
-
-# Keep Mistune's recursive emphasis parser, restricting only its start marker.
-_ASTERISK_EMPHASIS = r"\*{1,3}(?=[^\s*])"
-
 
 # RST role definition prepended to output when raw HTML is used
 PROLOG = """\
@@ -73,7 +73,12 @@ class M2R2:
             if disable_inline_math and "inline_math" in md.inline.rules:
                 md.inline.rules.remove("inline_math")
             if no_underscore_emphasis:
-                md.inline.specification["emphasis"] = _ASTERISK_EMPHASIS
+                md.inline.register(
+                    "literal_underscore",
+                    LITERAL_UNDERSCORE_PATTERN,
+                    parse_literal_underscore,
+                    before="emphasis",
+                )
 
         plugins.extend([custom_rst_directives, table, footnotes, strikethrough])
 
