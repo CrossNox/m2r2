@@ -122,6 +122,7 @@ Here is reST style code block.
 |----------------|----------------|----------------|
 | normal         | *italic*       | **bold**       |
 | `code` | ~~deleted~~  | <b>inline-html</b> |
+| ![Version](https://img.shields.io/pypi/v/m2r2.svg) | text before ![Version](https://img.shields.io/pypi/v/m2r2.svg) and after | images in cells |
 
 ### Math
 

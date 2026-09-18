@@ -1,3 +1,11 @@
+### Version 1.0.0 (2026-02-11)
+* Drop support for Python < 3.9.
+* Upgrade to Mistune 3.0+.
+* Rename the converter class to `M2R2`, retaining `M2R` as an alias.
+* Deprecate Sphinx config `no_underscore_emphasis` in favor of `m2r_no_underscore_emphasis`.
+* Support inline images, including images in table cells, using RST substitutions.
+* Render links and code inside emphasis independently to avoid unsupported nested RST markup.
+
 ### Version 0.3.4 (2025-05-01)
 * Fixed dependencies errors
 
@@ -10,10 +18,6 @@
 
 ### Version 0.3.1 (2021-07-13)
 * Fix argparse for python3.10
-
-### Version 0.3.0 (2021-07-12)
-* Add support for mermaid code
-* Change bump for bump2version
 
 ### Version 0.3.0 (2021-07-12)
 * Add support for mermaid code
@@ -45,7 +49,7 @@
 
 * Add `--disable-inline-math` and `m2r_disable_inline_math` sphinx option
 
-## Version 0.2.0 (2018-08-13)
+### Version 0.2.0 (2018-08-13)
 
 * Add `start-line` and `end-line` option to `mdinclude` directive
 * Add `anonymous_references` option ([#26](https://github.com/miyakogi/m2r/pull/26))
@@ -117,6 +121,6 @@
 
 * Fix Bug: when code or link is placed at the end of line, spaces to the next word is disappeared
 
-## Version 0.1 (2016-05-30)
+### Version 0.1 (2016-05-30)
 
 First public release.

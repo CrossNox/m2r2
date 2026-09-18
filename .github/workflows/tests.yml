@@ -1,21 +1,76 @@
-name: Run tests
+name: Tests
 
-on: [push]
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
+  test:
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "pypy3.10"]
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          version: "latest"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
       - name: Install dependencies
-        run: pip install nox
-      - name: Run tests session
-        run: nox --sessions tests --python ${{ matrix.python-version }}
+        run: uv sync --locked --python ${{ matrix.python-version }}
+
+      - name: Run tests
+        run: uv run --python ${{ matrix.python-version }} pytest
+
+      - name: Test minimum converter dependencies
+        if: matrix.python-version == '3.9'
+        run: uv run --with "mistune==3.0.0" --with "docutils==0.19" pytest tests --ignore=tests/test_sphinx.py
+
+  sphinx_old:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --locked --python 3.11
+
+      - name: Build with old sphinx version
+        run: uv run --with "sphinx==1.7.0" --with "alabaster==0.7.13" --with "jinja2==3.0.0" --with "setuptools<71" sphinx-build -W -E -n -j auto -b html docs docs/_build/html
+
+  sphinx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --locked --python 3.13
+
+      - name: Build with latest sphinx version
+        run: uv run sphinx-build -W -E -n -j auto -b html docs docs/_build/html
