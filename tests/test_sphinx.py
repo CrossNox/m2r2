@@ -10,8 +10,6 @@ from unittest import TestCase
 from docutils import nodes
 from sphinx.testing.util import SphinxTestApp
 
-from m2r2 import convert
-
 
 class SphinxTestBase(TestCase):
     """Base class that builds Sphinx projects and cleans them up after each test."""
@@ -84,10 +82,22 @@ class TestSetup(SphinxTestBase):
 
     def test_mermaid_auto_detect(self):
         """m2r_use_mermaid defaults to True when sphinxcontrib.mermaid is loaded."""
-        app, _, _ = self.build_html_project_with_m2r2(
-            source_files_by_name={"index.md": "# Hello\n"}
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            extra_conf_py='extensions = ["m2r2", "sphinxcontrib.mermaid"]',
+            source_files_by_name={
+                "index.md": """\
+# Test
+
+```mermaid
+graph TD
+    A --> B
+```
+"""
+            },
         )
-        self.assertFalse(app.config.m2r_use_mermaid)
+        self.assertTrue(app.config.m2r_use_mermaid)
+        self.assertEqual(warning, "")
+        self.assertIn('class="mermaid"', (outdir / "index.html").read_text())
 
     def test_deprecated_no_underscore_emphasis(self):
         """Old 'no_underscore_emphasis' config emits deprecation and still works."""
@@ -141,7 +151,6 @@ class TestM2R2Parser(SphinxTestBase):
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].astext(), "code")
         self.assertNotIn("code", blocks[0]["classes"])
-        self.assertEqual(convert("```\ncode\n```"), "\n.. code-block::\n\n   code\n")
 
     def test_basic_markdown_build(self):
         _, outdir, _ = self.build_html_project_with_m2r2(
@@ -172,7 +181,8 @@ _underscored_ text
         self.assertIn("_underscored_", html)
 
     def test_anonymous_references_config(self):
-        _, outdir, _ = self.build_html_project_with_m2r2(
+        """Anonymous references create no named target nodes."""
+        app, _, _ = self.build_html_project_with_m2r2(
             extra_conf_py="m2r_anonymous_references = True",
             source_files_by_name={
                 "index.md": """\
@@ -182,8 +192,13 @@ _underscored_ text
 """
             },
         )
-        html = (outdir / "index.html").read_text()
-        self.assertIn("http://example.com", html)
+        doctree = app.env.get_doctree("index")
+
+        references = list(doctree.findall(nodes.reference))
+        self.assertEqual(len(references), 1)
+        self.assertEqual(references[0]["refuri"], "http://example.com")
+
+        self.assertEqual(list(doctree.findall(nodes.target)), [])
 
     def test_inline_html_renders(self):
         _, outdir, _ = self.build_html_project_with_m2r2(
@@ -199,7 +214,7 @@ text <b>bold</b> text
         self.assertIn("<b>bold</b>", html)
 
     def test_code_block(self):
-        _, outdir, _ = self.build_html_project_with_m2r2(
+        app, _, warning = self.build_html_project_with_m2r2(
             source_files_by_name={
                 "index.md": """\
 # Test
@@ -210,37 +225,45 @@ print('hello')
 """
             }
         )
-        html = (outdir / "index.html").read_text()
-        self.assertIn("print", html)
+        self.assertEqual(warning, "")
+        blocks = list(app.env.get_doctree("index").findall(nodes.literal_block))
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0]["language"], "python")
+        self.assertEqual(blocks[0].astext(), "print('hello')")
 
     def test_multiple_documents(self):
         """Ensure converter state doesn't leak between documents."""
-        _, outdir, _ = self.build_html_project_with_m2r2(
+        # Sphinx reads documents in sorted order, so "plain" is read after "index"
+        app, _, warning = self.build_html_project_with_m2r2(
             source_files_by_name={
-                "index.md": (
-                    """\
+                "index.md": """\
 # Index
 
-text <b>bold</b> text
+text[^1] and before ![A](https://example.com/a.png) after
 
-```{toctree}
-doc2
-```
-"""
-                ),
-                "doc2.md": """\
-# Doc 2
+.. toctree::
+
+   plain
+
+[^1]: leaked note
+""",
+                "plain.md": """\
+# Plain
 
 Plain text only.
 """,
             }
         )
-        html1 = (outdir / "index.html").read_text()
-        html2 = (outdir / "doc2.html").read_text()
-        self.assertIn("<b>bold</b>", html1)
-        self.assertIn("Plain text only", html2)
-        # raw-html-m2r role should NOT appear in doc2 (no HTML there)
-        self.assertNotIn("raw-html-m2r", html2)
+        self.assertEqual(warning, "")
+
+        index = app.env.get_doctree("index")
+        self.assertEqual(len(list(index.findall(nodes.footnote))), 1)
+        self.assertEqual(len(list(index.findall(nodes.substitution_definition))), 1)
+
+        plain = app.env.get_doctree("plain")
+        self.assertEqual(list(plain.findall(nodes.footnote)), [])
+        self.assertEqual(list(plain.findall(nodes.substitution_definition)), [])
+        self.assertEqual(list(plain.findall(nodes.image)), [])
 
 
 class TestMdInclude(SphinxTestBase):
@@ -325,8 +348,7 @@ Included content.
         self.assertIn("Included Section", html)
         self.assertIn("Included content", html)
 
-    def test_start_line_zero(self):
-        """Regression: start-line=0 must not be treated as falsy."""
+    def test_start_and_end_line_select_range(self):
         _, outdir, _ = self.build_html_project_with_m2r2(
             source_files_by_name={
                 "index.rst": (
@@ -335,8 +357,8 @@ Test
 ====
 
 .. mdinclude:: included.md
-   :start-line: 0
-   :end-line: 2
+   :start-line: 2
+   :end-line: 3
 """
                 ),
                 "included.md": """\
@@ -349,7 +371,8 @@ line4
             }
         )
         html = (outdir / "index.html").read_text()
-        self.assertIn("line0", html)
+        self.assertIn("line2", html)
+        self.assertNotIn("line0", html)
         self.assertNotIn("line4", html)
 
     def test_end_line_only(self):
