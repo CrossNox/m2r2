@@ -1,13 +1,65 @@
+from __future__ import annotations
+
 import html
 import os
+import re
 from collections.abc import Container, Iterable
 from hashlib import sha256
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 from urllib.parse import urlparse
 
 from docutils.utils import column_width
 from mistune.core import BlockState
 from mistune.renderers.rst import RSTRenderer
+
+if TYPE_CHECKING:
+    from mistune import Markdown
+
+RAW_HTML_ROLE_NAME = "raw-html-m2r"
+RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
+
+# Matches: :raw-html-m2r:`<tag>`\ text\ :raw-html-m2r:`</tag>`
+# and combines into: :raw-html-m2r:`<tag>text</tag>`
+# The middle group excludes backslashes and newlines to prevent
+# cross-line merges that would consume unrelated RST content.
+_RAW_HTML_MERGE_PATTERN = re.compile(
+    rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ ([^\\\n]+)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
+)
+
+
+def record_role_definition(state: BlockState, name: str, definition: str) -> None:
+    """Record a role the body uses, to be defined above it."""
+    state.env.setdefault("role_definitions", {})[name] = definition
+
+
+def record_substitution_definition(
+    state: BlockState, name: str, definition: str
+) -> None:
+    """Record a substitution the body references, to be defined above it."""
+    state.env.setdefault("substitution_definitions", {})[name] = definition
+
+
+def merge_adjacent_raw_html_roles(text: str) -> str:
+    """Join raw HTML roles that mistune splits across tokens."""
+    while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
+        text = _RAW_HTML_MERGE_PATTERN.sub(rf":{RAW_HTML_ROLE_NAME}:`\1\2\3`", text)
+    return text
+
+
+def remove_redundant_inline_escapes(text: str) -> str:
+    """Drop the ``\\ `` escapes this renderer writes where RST does not need them.
+
+    The renderer separates inline markup from its surroundings with an escaped
+    space. At a line boundary, between spaces, or before a period, that escape
+    carries no meaning.
+    """
+    return (
+        text.replace("\\ \n", "\n")
+        .replace("\n\\ ", "\n")
+        .replace(" \\ ", " ")
+        .replace("\\  ", " ")
+        .replace("\\ .", ".")
+    )
 
 
 class RestRenderer(RSTRenderer):
@@ -84,18 +136,13 @@ class RestRenderer(RSTRenderer):
             yield self.render_token(tok, state)
 
     def __call__(self, tokens: Iterable[dict[str, Any]], state: BlockState) -> str:
-        """Render a document with its image substitution definitions."""
-        state.env["image_definitions"] = {}
-        output = self.render_tokens(tokens, state)
-        definitions = [
-            definition
-            for name, definition in state.env["image_definitions"].items()
-            if name not in self.existing_substitutions
-        ]
-        if len(definitions) > 0:
-            # Define substitutions before mdinclude directives can reuse them.
-            output = "\n\n".join(definitions) + "\n\n" + output
-        return output
+        """Render tokens into the body of a document.
+
+        Mistune calls this once for the body and again for the footnotes, so
+        the definitions the body relies on are written by
+        ``prepend_document_definitions`` once both passes are done.
+        """
+        return self.render_tokens(tokens, state)
 
     def thematic_break(self, token, state):
         """Override to use shorter horizontal rule"""
@@ -103,7 +150,8 @@ class RestRenderer(RSTRenderer):
 
     def linebreak(self, token, state):
         """Override to use raw HTML format instead of line blocks"""
-        return "\\ :raw-html-m2r:`<br>`\n"
+        record_role_definition(state, RAW_HTML_ROLE_NAME, RAW_HTML_ROLE_DEFINITION)
+        return f"\\ :{RAW_HTML_ROLE_NAME}:`<br>`\n"
 
     def paragraph(self, token: dict[str, Any], state: BlockState) -> str:
         """Render a paragraph or a standalone image block."""
@@ -128,10 +176,11 @@ class RestRenderer(RSTRenderer):
             self.indent + line if line else "" for line in block.splitlines()
         )
 
-    def _raw_html(self, raw):
+    def _raw_html(self, raw, state):
+        record_role_definition(state, RAW_HTML_ROLE_NAME, RAW_HTML_ROLE_DEFINITION)
         # Escape backticks to prevent breaking the RST role syntax
         raw = raw.replace("`", "&#96;")
-        return rf"\ :raw-html-m2r:`{raw}`\ "
+        return rf"\ :{RAW_HTML_ROLE_NAME}:`{raw}`\ "
 
     def block_code(self, token: dict[str, Any], state: BlockState):
         # Extract code content from token
@@ -216,7 +265,8 @@ class RestRenderer(RSTRenderer):
 
         if title:
             return self._raw_html(
-                f'<a href="{html.escape(link)}" title="{html.escape(title)}">{text}</a>'
+                f'<a href="{html.escape(link)}" title="{html.escape(title)}">{text}</a>',
+                state,
             )
 
         if not self.parse_relative_links:
@@ -289,7 +339,7 @@ class RestRenderer(RSTRenderer):
         if not inline:
             return f"\n\n.. {content}\n\n"
         name = "m2r-image-" + sha256(content.encode("utf-8")).hexdigest()
-        state.env["image_definitions"][name] = f".. |{name}| {content}"
+        record_substitution_definition(state, name, f".. |{name}| {content}")
         return rf"\ |{name}|\ "
 
     def block_html(self, token, state):
@@ -301,7 +351,7 @@ class RestRenderer(RSTRenderer):
     def inline_html(self, token, state):
         """Render inline HTML as raw HTML role"""
         raw = token.get("raw", "")
-        return self._raw_html(raw)
+        return self._raw_html(raw, state)
 
     def codespan(self, token, state):
         """Render inline code span.
@@ -322,13 +372,14 @@ class RestRenderer(RSTRenderer):
             return self._raw_html(
                 '<code class="docutils literal">'
                 f'<span class="pre">{code.replace("`", "&#96;")}</span>'
-                "</code>"
+                "</code>",
+                state,
             )
 
     def strikethrough(self, token, state):
         """Render strikethrough as raw HTML ``<del>`` via raw-html-m2r role."""
         text = self.render_children(token, state)
-        return self._raw_html(f"<del>{text}</del>")
+        return self._raw_html(f"<del>{text}</del>", state)
 
     def emphasis(self, token: dict[str, Any], state: BlockState) -> str:
         return self.render_emphasis(token, state, "*")
@@ -462,3 +513,42 @@ class RestRenderer(RSTRenderer):
         if content:
             return "\n\n" + content
         return ""
+
+
+def prepend_document_definitions(
+    md: Markdown, result: str | list[dict[str, Any]], state: BlockState
+) -> str | list[dict[str, Any]]:
+    """Write the role and substitution definitions above the rendered body.
+
+    The definitions come first so that an ``mdinclude`` directive further down
+    the document sees them already defined.
+    """
+    body = cast("str", result)
+    renderer = cast("RestRenderer", md.renderer)
+    substitution_definitions = [
+        definition
+        for name, definition in state.env.get("substitution_definitions", {}).items()
+        if name not in renderer.existing_substitutions
+    ]
+
+    if len(substitution_definitions) > 0:
+        document = "\n" + "\n\n".join(substitution_definitions) + "\n\n" + body
+    else:
+        document = "\n" + body.lstrip("\n")
+
+    document = remove_redundant_inline_escapes(merge_adjacent_raw_html_roles(document))
+
+    role_definitions = list(state.env.get("role_definitions", {}).values())
+    if len(role_definitions) > 0:
+        document = "\n\n".join(role_definitions) + "\n\n" + document
+
+    return document
+
+
+def write_document_definitions(md: Markdown) -> None:
+    """Register the hook that writes definitions above a rendered document.
+
+    Mistune runs after-render hooks in registration order, so this plugin goes
+    last, once the footnote plugin has rendered its own pass.
+    """
+    md.after_render_hooks.append(prepend_document_definitions)

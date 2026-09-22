@@ -7,7 +7,7 @@ from docutils.readers.standalone import Reader
 from docutils.writers.pseudoxml import Writer
 
 from m2r2 import M2R2, convert
-from m2r2.m2r2 import PROLOG
+from m2r2.rst.renderer import RAW_HTML_ROLE_DEFINITION
 
 
 class RendererTestBase(TestCase):
@@ -90,7 +90,8 @@ b
         out = self.conv(src)
         self.assertEqual(
             out,
-            PROLOG
+            RAW_HTML_ROLE_DEFINITION
+            + "\n\n"
             + """
 abc def\\ :raw-html-m2r:`<br>`
 ghi"""
@@ -406,7 +407,10 @@ this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`
     def test_inline_html(self):
         src = "this is <s>html</s>."
         out = self.conv(src)
-        self.assertEqual(out, PROLOG + "\nthis is :raw-html-m2r:`<s>html</s>`.\n")
+        self.assertEqual(
+            out,
+            RAW_HTML_ROLE_DEFINITION + "\n\n\nthis is :raw-html-m2r:`<s>html</s>`.\n",
+        )
 
     def test_inline_html_with_colon(self):
         """Inline HTML containing colons must be properly merged."""
@@ -1478,6 +1482,27 @@ This is a sphinx [ref]_ global ref.
         out = self.conv(src)
         self.assertEqual(out, "\n" + src)
 
+    def test_image_in_footnote_is_defined(self):
+        """Mistune renders footnotes in a second pass that shares the definitions."""
+        src = """\
+text[^1]
+
+[^1]: see ![i](https://example.com/i.png)"""
+        out = self.conv(src)
+        name = (
+            "m2r-image-4117ba719ca02209d22057871ef13122b07e22dc1878842367a064d81209df66"
+        )
+        self.assertEqual(out.count(f".. |{name}| image::"), 1)
+        self.assertLess(out.index(f".. |{name}| image::"), out.index("text\\ [#fn-1]_"))
+
+    def test_image_in_body_and_footnote_is_defined_once(self):
+        src = """\
+see ![i](https://example.com/i.png) text[^1]
+
+[^1]: see ![i](https://example.com/i.png)"""
+        out = self.conv(src)
+        self.assertEqual(out.count("image:: https://example.com/i.png"), 1)
+
 
 class TestDirective(RendererTestBase):
     def test_comment_oneline(self):
@@ -1618,7 +1643,7 @@ class TestRawHtmlProlog(RendererTestBase):
         self.assertIn(":raw-html-m2r:", out)
 
     def test_prolog_not_sticky_across_calls(self):
-        """Ensure raw HTML in one document doesn't leak PROLOG into the next."""
+        """Ensure raw HTML in one document doesn't leak its role definition into the next."""
         converter = M2R2()
         out1 = converter("text <b>bold</b> text")
         self.assertIn("raw-html-m2r", out1)
