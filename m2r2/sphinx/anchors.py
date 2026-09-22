@@ -74,6 +74,40 @@ def get_or_create_document_anchor_map(
     return env.m2r2_document_anchors
 
 
+def get_or_create_document_anchor_references(
+    env: BuildEnvironment,
+) -> dict[str, dict[tuple[str, str], str | None]]:
+    """Track the resolved element id of each document's anchor references."""
+    if not hasattr(env, "m2r2_document_anchor_references"):
+        env.m2r2_document_anchor_references = {}
+    return env.m2r2_document_anchor_references
+
+
+def normalize_target_document_path(source_docname: str, path: str) -> str:
+    """Resolve an encoded link path relative to its source document."""
+    if path == "":
+        return source_docname
+    return docname_join(source_docname, os.path.splitext(unquote(path))[0])
+
+
+def find_documents_with_changed_anchor_references(
+    app: Sphinx, env: BuildEnvironment
+) -> list[str]:
+    """Select pages to rewrite after all target anchor maps have been collected."""
+    anchors = get_or_create_document_anchor_map(env)
+    documents_to_rewrite = set()
+    for docname, references in get_or_create_document_anchor_references(env).items():
+        for (target_docname, slug), previous_id in references.items():
+            element_id = anchors.get(target_docname, {}).get(slug)
+            if element_id != previous_id:
+                documents_to_rewrite.add(docname)
+                references[target_docname, slug] = element_id
+
+    if len(documents_to_rewrite) > 0:
+        logger.debug("m2r2 updating anchor links in %s", sorted(documents_to_rewrite))
+    return sorted(documents_to_rewrite)
+
+
 def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
     """Record the ids and GitHub heading anchors of the document just read."""
     sections = list(doctree.findall(nodes.section))
@@ -84,7 +118,9 @@ def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
         anchors.setdefault(element_id, element_id)
     for name, is_explicit in doctree.nametypes.items():
         if is_explicit:
-            anchors[name] = doctree.nameids[name]
+            element_id = doctree.nameids[name]
+            anchors[name] = element_id
+            anchors[element_id] = element_id
     get_or_create_document_anchor_map(app.env)[app.env.docname] = anchors
 
 
@@ -100,6 +136,7 @@ def extract_visible_heading_text(node: nodes.Node) -> str:
 def forget_document_anchors(app: Sphinx, env: BuildEnvironment, docname: str) -> None:
     """Drop the anchors of a document Sphinx is about to read again."""
     get_or_create_document_anchor_map(env).pop(docname, None)
+    get_or_create_document_anchor_references(env).pop(docname, None)
 
 
 def merge_document_anchors(
@@ -111,8 +148,11 @@ def merge_document_anchors(
     """Take the anchors a worker process of a parallel build recorded."""
     anchors = get_or_create_document_anchor_map(env)
     other_anchors = get_or_create_document_anchor_map(other)
+    references = get_or_create_document_anchor_references(env)
+    other_references = get_or_create_document_anchor_references(other)
     for docname in docnames:
         anchors[docname] = other_anchors[docname]
+        references[docname] = other_references.get(docname, {})
 
 
 def create_document_anchor_reference(
@@ -126,11 +166,13 @@ def create_document_anchor_reference(
 ) -> tuple[list[nodes.Node], list[nodes.system_message]]:
     """Create a reference that resolves from a document anchor."""
     has_title, title, target = split_explicit_title(utils.unescape(text))
-    path, _, _ = target.partition("#")
-    if path != "":
-        env = inliner.document.settings.env
-        target_docname = docname_join(env.docname, os.path.splitext(unquote(path))[0])
-        env.note_dependency(env.doc2path(target_docname))
+    path, _, fragment = target.partition("#")
+    env = inliner.document.settings.env
+    target_docname = normalize_target_document_path(env.docname, path)
+    references = get_or_create_document_anchor_references(env).setdefault(
+        env.docname, {}
+    )
+    references[target_docname, unquote(fragment)] = None
     reference = addnodes.pending_xref(
         rawtext,
         refdomain="",
@@ -160,12 +202,7 @@ def resolve_document_anchor_reference(
     path, _, fragment = node["reftarget"].partition("#")
     slug = unquote(fragment)
     source_docname = node["refdoc"]
-    if path == "":
-        target_docname = source_docname
-    else:
-        target_docname = docname_join(
-            source_docname, os.path.splitext(unquote(path))[0]
-        )
+    target_docname = normalize_target_document_path(source_docname, path)
 
     if target_docname not in env.found_docs:
         logger.warning(
@@ -201,4 +238,5 @@ def register_document_anchors(app: Sphinx) -> None:
     app.connect("doctree-read", record_document_anchors)
     app.connect("env-purge-doc", forget_document_anchors)
     app.connect("env-merge-info", merge_document_anchors)
+    app.connect("env-updated", find_documents_with_changed_anchor_references)
     app.connect("missing-reference", resolve_document_anchor_reference)

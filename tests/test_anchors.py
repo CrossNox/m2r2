@@ -1,5 +1,6 @@
 """Tests for the GitHub-style heading anchors m2r2 resolves under Sphinx."""
 
+import os
 import shutil
 import tempfile
 from io import StringIO
@@ -158,7 +159,8 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
 
     def find_reference_to_text(self, app, docname, text):
         """Return the resolved reference with the given link text."""
-        doctree = app.env.get_and_resolve_doctree(docname, app.builder)
+        doctree = app.env.get_doctree(docname)
+        app.env.apply_post_transforms(doctree, docname)
         references = [
             reference
             for reference in doctree.findall(nodes.reference)
@@ -283,6 +285,25 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         self.assertEqual(
             self.find_reference_to_text(app, "index", "second")["refid"], second_foo_id
         )
+
+    def test_normalized_label_id_wins_over_a_github_anchor(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Title\n\n[details](#version-10) [name](#version%2010)\n\n"
+                    "## Version 1.0\n\nHeading target.\n\n"
+                    ".. _version 10:\n\n## Label target\n"
+                ),
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        for text in ("details", "name"):
+            self.assertEqual(
+                self.find_reference_to_text(app, "index", text)["refid"],
+                "version-10",
+            )
 
     def test_unicode_heading_anchor_resolves_from_encoded_or_plain_destination(self):
         srcdir = self.create_project(
@@ -444,6 +465,44 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         self.assertIn(
             f'href="target.html#{new_id}"', self.read_built_page(app, "source")
         )
+
+    def test_rebuild_rewrites_links_when_included_heading_ids_change(self):
+        for parallel in (0, 2):
+            with self.subTest(parallel=parallel):
+                pages = {
+                    f"target{number}.md": f"# Target {number}\n\n.. mdinclude:: parts.txt\n"
+                    for number in range(6)
+                }
+                toctree = "\n".join(f"   target{number}" for number in range(6))
+                srcdir = self.create_project(
+                    {
+                        "index.md": f"# Index\n\n.. toctree::\n\n   source\n{toctree}\n",
+                        "source.md": "# Source\n\n[second](target0.md#part-1)\n",
+                        "parts.txt": "## Part\n\n## Part\n",
+                        **pages,
+                    },
+                    extra_conf_py="m2r_parse_relative_links = True",
+                )
+                first_app, first_warning = self.build_project(srcdir, parallel=parallel)
+                self.assertEqual(first_warning, "")
+                old_id = self.find_section_ids(first_app, "target0")[2]
+                first_app.cleanup()
+
+                included_file = srcdir / "parts.txt"
+                previous_mtime = included_file.stat().st_mtime
+                included_file.write_text("## Extra\n\n## Extra\n\n## Part\n\n## Part\n")
+                os.utime(included_file, (previous_mtime + 2, previous_mtime + 2))
+                app, warning = self.build_project(
+                    srcdir, freshenv=False, parallel=parallel
+                )
+
+                self.assertEqual(warning, "")
+                new_id = self.find_section_ids(app, "target0")[4]
+                self.assertNotEqual(old_id, new_id)
+                self.assertIn(
+                    f'href="target0.html#{new_id}"', self.read_built_page(app, "source")
+                )
+                app.cleanup()
 
     def test_parallel_build_resolves_links(self):
         pages = {

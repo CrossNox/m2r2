@@ -10,7 +10,7 @@ from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 from urllib.parse import urlparse
 
-from docutils.utils import column_width
+from docutils.utils import column_width, escape2null, unescape
 from mistune.core import BlockState
 from mistune.renderers.html import HTMLRenderer
 from mistune.renderers.rst import RSTRenderer
@@ -55,12 +55,18 @@ class SubstitutionNameCollision(Exception):
     """Two substitution definitions in one document want the same name."""
 
 
-# Matches: :raw-html-m2r:`<tag>`\ text\ :raw-html-m2r:`</tag>`
-# and combines into: :raw-html-m2r:`<tag>text</tag>`
-# The middle group excludes backslashes and newlines to prevent
-# cross-line merges that would consume unrelated RST content.
+# The middle group accepts escaped characters, but stops at line boundaries
+# and inline markup that must still be parsed as RST.
 _RAW_HTML_MERGE_PATTERN = re.compile(
-    rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ ([^\\\n]+)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
+    rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ "
+    rf"((?:\\[^\n]|[^\\\n`*|])+?)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
+)
+
+_REFERENCE_ROLE_NAMES = frozenset(
+    "any doc download eq numref ref term token keyword option envvar "
+    "mod func data const class meth attr exc obj "
+    "member var type macro enumerator struct union enum expr "
+    "function method attribute module directive role".split()
 )
 
 
@@ -137,7 +143,7 @@ def flatten_to_plain_text(token: dict[str, Any]) -> str:
     if token_type == "inline_math":
         return str(token["math"])
     if token_type in ("rest_role", "rest_link"):
-        return str(token["text"]).split("`", 2)[1].split(" <", 1)[0]
+        return extract_visible_rst_token_text(token)
     if token_type == "rst_footnote_ref":
         return str(token["text"])
     if token_type == "eol_literal_marker":
@@ -149,6 +155,21 @@ def flatten_to_plain_text(token: dict[str, Any]) -> str:
     if "children" in token:
         return "".join(flatten_to_plain_text(child) for child in token["children"])
     raise ValueError(f"Cannot flatten inline token {token_type!r}")
+
+
+def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
+    """Extract role content, stripping explicit targets only from references.
+
+    Built-in Sphinx reference roles accept a title followed by a target in
+    angle brackets. Ordinary roles keep their entire body, including comparisons.
+    """
+    prefix, body, suffix = str(token["text"]).split("`", 2)
+    role_name = (prefix + suffix).strip(":").split(":")[-1]
+    if token["type"] == "rest_link" or role_name in _REFERENCE_ROLE_NAMES:
+        title, separator, target = body.rpartition(" <")
+        if separator != "" and target.endswith(">"):
+            return title
+    return body
 
 
 def escape_reference_characters(text: str) -> str:
@@ -186,8 +207,15 @@ def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
 def merge_adjacent_raw_html_roles(text: str) -> str:
     """Join raw HTML roles that mistune splits across tokens."""
     while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
-        text = _RAW_HTML_MERGE_PATTERN.sub(rf":{RAW_HTML_ROLE_NAME}:`\1\2\3`", text)
+        text = _RAW_HTML_MERGE_PATTERN.sub(merge_raw_html_match, text)
     return text
+
+
+def merge_raw_html_match(match: re.Match[str]) -> str:
+    """Move escaped RST text into HTML without changing its visible characters."""
+    plain_text = unescape(escape2null(match[2]))
+    html_text = html.escape(plain_text, quote=False).replace("`", "&#96;")
+    return f":{RAW_HTML_ROLE_NAME}:`{match[1]}{html_text}{match[3]}`"
 
 
 def trim_inline_escapes(text: str) -> str:

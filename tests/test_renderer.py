@@ -520,6 +520,36 @@ class TestTextEscaping(RendererTestBase):
         image = next(document.findall(nodes.image))
         self.assertEqual(image["alt"], "a x y b")
 
+    def test_image_alt_preserves_comparisons_in_roles(self):
+        for role, expected in (
+            (":code:`x < y`", "x < y"),
+            (":code:`x < y>`", "x < y>"),
+            ("`x < y`:code:", "x < y"),
+            (":math:`x < y>`", "x < y>"),
+            (":custom:`x < y>`", "x < y>"),
+        ):
+            with self.subTest(role=role):
+                document = self.convert_markdown_to_document(
+                    f"![a {role} b](image.png)"
+                )
+                image = next(document.findall(nodes.image))
+                self.assertEqual(image["alt"], f"a {expected} b")
+
+    def test_image_alt_removes_explicit_reference_targets(self):
+        for reference in (
+            "`label <https://example.org>`_",
+            ":ref:`label <target>`",
+            "`label <target>`:doc:",
+            ":py:func:`label <target>`",
+        ):
+            with self.subTest(reference=reference):
+                document = self.convert_markdown_to_document(
+                    f"![a {reference} b](image.png)"
+                )
+                self.assertEqual(
+                    next(document.findall(nodes.image))["alt"], "a label b"
+                )
+
 
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
@@ -694,6 +724,18 @@ our |m2r-link-fc8682c5ec06|_ example
         raw_nodes = list(reference.findall(nodes.raw))
         self.assertEqual(len(raw_nodes), 1)
         self.assertEqual(raw_nodes[0].astext(), "<b>bold</b>")
+
+    def test_html_inside_link_keeps_escaped_text_in_one_raw_node(self):
+        for tag in ("b", "span class='red'"):
+            for text in ("my_name", "me@example.org", "10:30", r"C:\name", "a | b"):
+                with self.subTest(tag=tag, text=text):
+                    fragment = f"<{tag}>{text}</{tag.split()[0]}>"
+                    reference = self.find_only_reference(
+                        f"[{fragment}](https://example.org)"
+                    )
+                    raw_nodes = list(reference.findall(nodes.raw))
+                    self.assertEqual(len(raw_nodes), 1)
+                    self.assertEqual(raw_nodes[0].astext(), fragment)
 
     def test_anonymous_references_do_not_change_the_definition(self):
         src = "our **[end to end](https://example.com)** example"
@@ -1192,6 +1234,12 @@ class TestRelativeLinkRoles(RendererTestBase):
         )
         self.assertIn(":doc:`run() <other>`", out)
 
+    def test_document_link_keeps_comparisons_in_role_text(self):
+        out = self.conv_no_check(
+            "[a :code:`x < y` b](other.md)", parse_relative_links=True
+        )
+        self.assertIn(":doc:`a x < y b <other>`", out)
+
     def test_anchor_link_with_code_text(self):
         reference = self.find_only_reference(
             "see [`run()`](#section) now", parse_relative_links=True
@@ -1224,6 +1272,13 @@ class TestHeadingLinks(RendererTestBase):
 
         reference = self.find_only_reference(src)
         self.assertEqual(reference.astext(), "run()")
+
+    def test_heading_link_keeps_comparisons_in_role_text(self):
+        reference = self.find_only_reference(
+            "# [a :math:`x < y` b](https://example.org)\n"
+        )
+        self.assertEqual(reference.astext(), "a x < y b")
+        self.assertEqual(reference["refuri"], "https://example.org")
 
     def test_emphasis_without_a_link_survives(self):
         src = "# **bold** title\n\ntext\n"
