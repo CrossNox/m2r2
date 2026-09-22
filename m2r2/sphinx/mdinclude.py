@@ -1,6 +1,7 @@
 import warnings
 
 from m2r2.m2r2 import __version__
+from m2r2.sphinx.anchors import register_heading_anchors
 from m2r2.sphinx.directives import MdInclude
 
 
@@ -34,6 +35,7 @@ def setup(app):
     )
     app.connect("builder-inited", warn_deprecated_config)
     app.add_directive("mdinclude", MdInclude)
+    register_heading_anchors(app)
     return {
         "version": __version__,
         "parallel_read_safe": True,

@@ -82,6 +82,12 @@ ignore = [
 python_version = "3.9"
 check_untyped_defs = true
 
+# Recent Sphinx releases use syntax newer than the Python version checked here,
+# so mypy treats Sphinx's types as Any instead of parsing its source.
+[[tool.mypy.overrides]]
+module = ["sphinx", "sphinx.*"]
+follow_imports = "skip"
+
 [tool.coverage.run]
 source = ["m2r2"]
 branch = true
