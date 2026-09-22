@@ -537,6 +537,84 @@ second
         )
         self.assertEqual(warning, "")
 
+    def build_include_of_selected_lines(self, options):
+        """Include a five-line Markdown file, one word a line, with the given options."""
+        _, outdir, warning = self.build_html_project_with_m2r2(
+            source_files_by_name={
+                "index.rst": "Test\n====\n\n.. mdinclude:: numbers.txt\n"
+                + "".join(f"   :{name}: {value}\n" for name, value in options.items()),
+                "numbers.txt": "one\ntwo\nthree\nfour\nfive\n",
+            }
+        )
+        html = (outdir / "index.html").read_text()
+        body = html.split("</h1>", 1)[1].split("</section>", 1)[0]
+        return body, warning
+
+    def assert_selected_words(self, body, selected):
+        for word in ("one", "two", "three", "four", "five"):
+            with self.subTest(word=word):
+                if word in selected:
+                    self.assertIn(word, body)
+                else:
+                    self.assertNotIn(word, body)
+
+    def test_lines_single_number(self):
+        body, warning = self.build_include_of_selected_lines({"lines": "2"})
+        self.assertEqual(warning, "")
+        self.assert_selected_words(body, {"two"})
+
+    def test_lines_range(self):
+        body, warning = self.build_include_of_selected_lines({"lines": "2-3"})
+        self.assertEqual(warning, "")
+        self.assert_selected_words(body, {"two", "three"})
+
+    def test_lines_open_ranges(self):
+        body, warning = self.build_include_of_selected_lines({"lines": "-2, 5-"})
+        self.assertEqual(warning, "")
+        self.assert_selected_words(body, {"one", "two", "five"})
+
+    def test_lines_come_out_in_the_order_named(self):
+        body, warning = self.build_include_of_selected_lines({"lines": "4, 1"})
+        self.assertEqual(warning, "")
+        self.assert_selected_words(body, {"four", "one"})
+        self.assertLess(body.index("four"), body.index("one"))
+
+    def test_lines_then_markers(self):
+        body, warning = self.build_include_of_selected_lines(
+            {"lines": "2-5", "start-after": "three", "end-before": "five"}
+        )
+        self.assertEqual(warning, "")
+        self.assert_selected_words(body, {"four"})
+
+    def test_lines_with_start_line_is_an_error(self):
+        _, warning = self.build_include_of_selected_lines(
+            {"lines": "2", "start-line": "1"}
+        )
+        self.assertIn(
+            'Problem with "lines" option of "mdinclude" directive:\n'
+            'It cannot be combined with "start-line" or "end-line".',
+            warning,
+        )
+
+    def test_lines_past_the_end_is_an_error(self):
+        _, warning = self.build_include_of_selected_lines({"lines": "4-9"})
+        self.assertIn("'4-9' is outside the file, which has 5 lines.", warning)
+
+    def test_lines_backwards_range_is_an_error(self):
+        _, warning = self.build_include_of_selected_lines({"lines": "4-2"})
+        self.assertIn("The range '4-2' ends before it starts.", warning)
+
+    def test_lines_unreadable_entry_is_an_error(self):
+        _, warning = self.build_include_of_selected_lines({"lines": "1, x"})
+        self.assertIn("Cannot read 'x' as a line or a range of lines.", warning)
+
+    def test_lines_with_literal_is_an_error(self):
+        _, warning = self.build_include_of_selected_lines({"lines": "2", "literal": ""})
+        self.assertIn(
+            'It cannot be combined with "literal" or "code".',
+            warning,
+        )
+
     def build_include_shown_as_source(self, options):
         """Include a Markdown file with options that show it instead of converting."""
         return self.build_html_project_with_m2r2(

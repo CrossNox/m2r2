@@ -28,6 +28,8 @@ class MdInclude(rst.Directive):
     option_spec: ClassVar[dict] = {
         "start-line": int,
         "end-line": int,
+        # Borrowed from Sphinx's literalinclude, which selects lines this way.
+        "lines": directives.unchanged_required,
         "start-after": directives.unchanged_required,
         "end-before": directives.unchanged_required,
         "encoding": directives.encoding,
@@ -55,6 +57,65 @@ class MdInclude(rst.Directive):
             source_directory = os.path.dirname(os.path.abspath(source_path))
 
         return os.path.normpath(os.path.join(source_directory, include_path))
+
+    def select_lines(self, text):
+        """Keep the lines that start-line and end-line, or lines, select."""
+        lines = text.splitlines(keepends=True)
+        start_line = self.options.get("start-line")
+        end_line = self.options.get("end-line")
+
+        if "lines" not in self.options:
+            if start_line is None and end_line is None:
+                return text
+            return "".join(lines[start_line:end_line])
+
+        if start_line is not None or end_line is not None:
+            raise self.severe(
+                f'Problem with "lines" option of "{self.name}" directive:\n'
+                'It cannot be combined with "start-line" or "end-line".'
+            )
+        line_indexes = self.parse_line_selection(self.options["lines"], len(lines))
+        return "".join(lines[index] for index in line_indexes)
+
+    def parse_line_selection(self, selection, line_count):
+        """Turn a selection such as "1, 3-4, 7-" into the indexes of the lines it names.
+
+        Each entry is a line number, a range, a range from the first line such
+        as "-4", or a range to the last line such as "7-". Lines come out in the
+        order the entries name them.
+        """
+        indexes: list[int] = []
+        for entry in selection.split(","):
+            first_text, dash, last_text = entry.strip().partition("-")
+            try:
+                if dash == "":
+                    first = last = int(first_text)
+                elif first_text == "" and last_text == "":
+                    raise ValueError(entry)
+                else:
+                    first = 1 if first_text == "" else int(first_text)
+                    last = line_count if last_text == "" else int(last_text)
+            except ValueError as error:
+                raise self.severe(
+                    f'Problem with "lines" option of "{self.name}" directive:\n'
+                    f"Cannot read {entry.strip()!r} as a line or a range of lines."
+                ) from error
+
+            if first < 1 or last > line_count or first > line_count:
+                raise self.severe(
+                    f'Problem with "lines" option of "{self.name}" directive:\n'
+                    f"{entry.strip()!r} is outside the file, which has "
+                    f"{line_count} lines."
+                )
+            if first > last:
+                raise self.severe(
+                    f'Problem with "lines" option of "{self.name}" directive:\n'
+                    f"The range {entry.strip()!r} ends before it starts."
+                )
+
+            indexes.extend(range(first - 1, last))
+
+        return indexes
 
     def clip_text_between_markers(self, text):
         """Keep the text after the start-after marker and before the end-before one.
@@ -110,6 +171,12 @@ class MdInclude(rst.Directive):
         settings.env.note_included(included_file)
 
         if "literal" in self.options or "code" in self.options:
+            if "lines" in self.options:
+                # docutils' include, which shows the file, knows no such option.
+                raise self.severe(
+                    f'Problem with "lines" option of "{self.name}" directive:\n'
+                    'It cannot be combined with "literal" or "code".'
+                )
             return self.show_file_without_converting(included_file)
 
         path = utils.relative_path(None, included_file)
@@ -135,19 +202,14 @@ class MdInclude(rst.Directive):
                 f'Problems with "{self.name}" directive path:\n{io.error_string(error)}.'
             ) from error
 
-        start_line = self.options.get("start-line")
-        end_line = self.options.get("end-line")
         try:
-            if start_line is not None or end_line is not None:
-                lines = include_file.readlines()
-                raw_text = "".join(lines[start_line:end_line])
-            else:
-                raw_text = include_file.read()
+            raw_text = include_file.read()
         except UnicodeError as error:
             raise self.severe(
                 f'Problem with "{self.name}" directive:\n{io.error_string(error)}'
             ) from error
 
+        raw_text = self.select_lines(raw_text)
         raw_text = self.clip_text_between_markers(raw_text)
 
         converter = SphinxM2R2(self.state.document)
