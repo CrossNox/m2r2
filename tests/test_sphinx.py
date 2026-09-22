@@ -34,6 +34,7 @@ class SphinxTestBase(TestCase):
         (srcdir / "conf.py").write_text(f'extensions = ["m2r2"]\n{extra_conf_py}\n')
 
         for name, content in source_files_by_name.items():
+            (srcdir / name).parent.mkdir(parents=True, exist_ok=True)
             (srcdir / name).write_text(content)
 
         warning = StringIO()
@@ -515,6 +516,26 @@ second
         html = (outdir / "index.html").read_text()
         self.assertNotIn("first", html)
         self.assertIn("second", html)
+
+    def test_absolute_path_starts_at_the_source_directory(self):
+        _, outdir, warning = self.build_html_project_with_m2r2(
+            source_files_by_name={
+                "index.rst": "Test\n====\n\n.. toctree::\n\n   sub/page\n",
+                "sub/page.rst": "Page\n====\n\n.. mdinclude:: /shared.txt\n",
+                "shared.txt": "Shared content.\n",
+            }
+        )
+        self.assertEqual(warning, "")
+        self.assertIn("Shared content.", (outdir / "sub" / "page.html").read_text())
+
+    def test_included_markdown_source_is_not_reported_outside_a_toctree(self):
+        _, _, warning = self.build_html_project_with_m2r2(
+            source_files_by_name={
+                "index.rst": "Test\n====\n\n.. mdinclude:: part.md\n",
+                "part.md": "# Part\n\nPart content.\n",
+            }
+        )
+        self.assertEqual(warning, "")
 
     def build_include_between_markers(self, options):
         """Include a Markdown file with three sections and the given options."""

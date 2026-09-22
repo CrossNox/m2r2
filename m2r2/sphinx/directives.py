@@ -26,14 +26,22 @@ class MdInclude(rst.Directive):
         "tab-width": int,
     }
 
-    def make_include_path_relative_to_working_directory(self):
-        source_path = self.state_machine.get_source(self.lineno - 1)
-        source_directory = os.path.dirname(os.path.abspath(source_path))
+    def find_included_file(self):
+        """Return the absolute path of the file to include.
 
+        A relative path is relative to the file holding the directive. An
+        absolute one starts at the Sphinx source directory, as it does for
+        Sphinx's own include.
+        """
         include_path = directives.path(self.arguments[0])
-        resolved_path = os.path.normpath(os.path.join(source_directory, include_path))
+        if include_path.startswith("/"):
+            source_directory = str(self.state.document.settings.env.srcdir)
+            include_path = include_path.lstrip("/")
+        else:
+            source_path = self.state_machine.get_source(self.lineno - 1)
+            source_directory = os.path.dirname(os.path.abspath(source_path))
 
-        return utils.relative_path(None, resolved_path)
+        return os.path.normpath(os.path.join(source_directory, include_path))
 
     def clip_text_between_markers(self, text):
         """Keep the text after the start-after marker and before the end-before one.
@@ -68,7 +76,11 @@ class MdInclude(rst.Directive):
         if not settings.file_insertion_enabled:
             raise self.warning(f'"{self.name}" directive disabled.')
 
-        path = self.make_include_path_relative_to_working_directory()
+        included_file = self.find_included_file()
+        # Sphinx counts a noted file as included, so a Markdown source it
+        # would also build on its own is not reported as missing from a toctree.
+        settings.env.note_included(included_file)
+        path = utils.relative_path(None, included_file)
         encoding = self.options.get("encoding", settings.input_encoding)
         encoding_error_handler = settings.input_encoding_error_handler
         tab_width = self.options.get("tab-width", settings.tab_width)
