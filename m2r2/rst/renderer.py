@@ -18,6 +18,15 @@ if TYPE_CHECKING:
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
 
+#: Hex characters of the hash a substitution is named after. Twelve leaves the
+#: chance of two substitutions colliding in one document near one in a billion.
+SUBSTITUTION_NAME_HASH_LENGTH = 12
+
+
+class SubstitutionNameCollision(Exception):
+    """Two substitution definitions in one document want the same name."""
+
+
 # Matches: :raw-html-m2r:`<tag>`\ text\ :raw-html-m2r:`</tag>`
 # and combines into: :raw-html-m2r:`<tag>text</tag>`
 # The middle group excludes backslashes and newlines to prevent
@@ -32,11 +41,24 @@ def record_role_definition(state: BlockState, name: str, definition: str) -> Non
     state.env.setdefault("role_definitions", {})[name] = definition
 
 
-def record_substitution_definition(
-    state: BlockState, name: str, definition: str
-) -> None:
-    """Record a substitution the body references, to be defined above it."""
-    state.env.setdefault("substitution_definitions", {})[name] = definition
+def define_substitution(state: BlockState, name_prefix: str, directive: str) -> str:
+    """Record a substitution the body references, and return the name to use.
+
+    The name holds a hash of the directive, so the same content is defined once
+    per document and an ``mdinclude`` can tell whether its host already has it.
+    """
+    digest = sha256(directive.encode("utf-8")).hexdigest()
+    name = f"{name_prefix}-{digest[:SUBSTITUTION_NAME_HASH_LENGTH]}"
+    definition = f".. |{name}| {directive}"
+
+    definitions = state.env.setdefault("substitution_definitions", {})
+    if definitions.get(name, definition) != definition:
+        raise SubstitutionNameCollision(
+            f"Two substitutions want the name {name}:\n{definitions[name]}\n{definition}"
+        )
+    definitions[name] = definition
+
+    return name
 
 
 def merge_adjacent_raw_html_roles(text: str) -> str:
@@ -338,8 +360,7 @@ class RestRenderer(RSTRenderer):
         content = f"image:: {source}\n   :target: {target}\n   :alt: {alt}"
         if not inline:
             return f"\n\n.. {content}\n\n"
-        name = "m2r-image-" + sha256(content.encode("utf-8")).hexdigest()
-        record_substitution_definition(state, name, f".. |{name}| {content}")
+        name = define_substitution(state, "m2r-image", content)
         return rf"\ |{name}|\ "
 
     def block_html(self, token, state):

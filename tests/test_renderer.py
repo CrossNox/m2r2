@@ -1,13 +1,21 @@
+from hashlib import sha256
 from unittest import TestCase, skip
+from unittest.mock import patch
 
 from docutils import io
 from docutils.core import Publisher
 from docutils.parsers.rst import Parser as RstParser
 from docutils.readers.standalone import Reader
 from docutils.writers.pseudoxml import Writer
+from mistune.core import BlockState
 
 from m2r2 import M2R2, convert
-from m2r2.rst.renderer import RAW_HTML_ROLE_DEFINITION
+from m2r2.rst import renderer as renderer_module
+from m2r2.rst.renderer import (
+    RAW_HTML_ROLE_DEFINITION,
+    SubstitutionNameCollision,
+    define_substitution,
+)
 
 
 class RendererTestBase(TestCase):
@@ -799,17 +807,17 @@ before ![A](a.png) after
 * before ![A](a.png) after
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
 
-|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
-================================================================================
+|m2r-image-d79de0460ffb|
+============================
 
-before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+before |m2r-image-d79de0460ffb| after
 
-* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+* before |m2r-image-d79de0460ffb| after
 """
         self.assertEqual(self.conv(source), expected)
 
@@ -822,17 +830,17 @@ before [![A](a.png)](page.html) after
 * before [![A](a.png)](page.html) after
 """
         expected = """
-.. |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| image:: a.png
+.. |m2r-image-ed8a5249f9ad| image:: a.png
    :target: page.html
    :alt: A
 
 
-|m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed|
-================================================================================
+|m2r-image-ed8a5249f9ad|
+============================
 
-before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+before |m2r-image-ed8a5249f9ad| after
 
-* before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+* before |m2r-image-ed8a5249f9ad| after
 """
         self.assertEqual(self.conv(source), expected)
 
@@ -1314,11 +1322,11 @@ class TestTable(RendererTestBase):
 | ![A](a.png) | ![B](b.png) |
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+.. |m2r-image-bf1518c47185| image:: b.png
    :target: b.png
    :alt: B
 
@@ -1328,8 +1336,8 @@ class TestTable(RendererTestBase):
 
    * - A
      - B
-   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+   * - |m2r-image-d79de0460ffb|\\
+     - |m2r-image-bf1518c47185|\\
 
 """
         self.assertEqual(self.conv(source), expected)
@@ -1341,11 +1349,11 @@ class TestTable(RendererTestBase):
 | before ![A](a.png) after | ![B](b.png) |
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+.. |m2r-image-bf1518c47185| image:: b.png
    :target: b.png
    :alt: B
 
@@ -1355,8 +1363,8 @@ class TestTable(RendererTestBase):
 
    * - A
      - B
-   * - before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+   * - before |m2r-image-d79de0460ffb| after
+     - |m2r-image-bf1518c47185|\\
 
 """
         self.assertEqual(self.conv(source), expected)
@@ -1368,11 +1376,11 @@ class TestTable(RendererTestBase):
 | [![A](a.png)](https://example.com) | ![B](b.png) |
 """
         expected = """
-.. |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016| image:: a.png
+.. |m2r-image-486be9324634| image:: a.png
    :target: https://example.com
    :alt: A
 
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+.. |m2r-image-bf1518c47185| image:: b.png
    :target: b.png
    :alt: B
 
@@ -1382,8 +1390,8 @@ class TestTable(RendererTestBase):
 
    * - A
      - B
-   * - |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+   * - |m2r-image-486be9324634|\\
+     - |m2r-image-bf1518c47185|\\
 
 """
         self.assertEqual(self.conv(source), expected)
@@ -1397,11 +1405,11 @@ class TestTable(RendererTestBase):
 [img]: a.png
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+.. |m2r-image-bf1518c47185| image:: b.png
    :target: b.png
    :alt: B
 
@@ -1411,8 +1419,8 @@ class TestTable(RendererTestBase):
 
    * - A
      - B
-   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+   * - |m2r-image-d79de0460ffb|\\
+     - |m2r-image-bf1518c47185|\\
 
 """
         self.assertEqual(self.conv(source), expected)
@@ -1489,9 +1497,7 @@ text[^1]
 
 [^1]: see ![i](https://example.com/i.png)"""
         out = self.conv(src)
-        name = (
-            "m2r-image-4117ba719ca02209d22057871ef13122b07e22dc1878842367a064d81209df66"
-        )
+        name = "m2r-image-4117ba719ca0"
         self.assertEqual(out.count(f".. |{name}| image::"), 1)
         self.assertLess(out.index(f".. |{name}| image::"), out.index("text\\ [#fn-1]_"))
 
@@ -1680,17 +1686,17 @@ before ![A](a.png) after
 * before ![A](a.png) after
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
 
-|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
-================================================================================
+|m2r-image-d79de0460ffb|
+============================
 
-before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+before |m2r-image-d79de0460ffb| after
 
-* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+* before |m2r-image-d79de0460ffb| after
 """
         self.assertEqual(converter(source), expected)
         self.assertEqual(converter("plain text"), "\nplain text\n")
@@ -1730,3 +1736,33 @@ Text[^1].
         out2 = converter("no footnotes here\n")
         self.assertNotIn("[#fn", out2)
         self.assertIn("no footnotes here", out2)
+
+
+class TestSubstitutionNames(TestCase):
+    """Substitutions are named after a hash of what they define."""
+
+    def find_directives_sharing_a_one_character_hash(self):
+        directives_by_digest = {}
+        for number in range(100):
+            directive = f"image:: {number}.png"
+            digest = sha256(directive.encode("utf-8")).hexdigest()[:1]
+            if digest in directives_by_digest:
+                return directives_by_digest[digest], directive
+            directives_by_digest[digest] = directive
+        raise AssertionError("no two directives shared a one character hash")
+
+    def test_name_holds_twelve_hex_characters(self):
+        out = convert("see ![A](a.png) here\n")
+        self.assertRegex(out, r"\.\. \|m2r-image-[0-9a-f]{12}\| image:: a\.png")
+
+    def test_same_content_is_defined_once(self):
+        out = convert("see ![A](a.png) and ![A](a.png) here\n")
+        self.assertEqual(out.count("image:: a.png"), 1)
+
+    def test_colliding_names_raise(self):
+        first, second = self.find_directives_sharing_a_one_character_hash()
+        state = BlockState()
+        with patch.object(renderer_module, "SUBSTITUTION_NAME_HASH_LENGTH", 1):
+            define_substitution(state, "m2r-image", first)
+            with self.assertRaises(SubstitutionNameCollision):
+                define_substitution(state, "m2r-image", second)
