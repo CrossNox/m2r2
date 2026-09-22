@@ -2,7 +2,7 @@ from hashlib import sha256
 from unittest import TestCase, skip
 from unittest.mock import patch
 
-from docutils import io
+from docutils import io, nodes
 from docutils.core import Publisher
 from docutils.parsers.rst import Parser as RstParser
 from docutils.readers.standalone import Reader
@@ -27,6 +27,18 @@ class RendererTestBase(TestCase):
     def conv_no_check(self, src, **kwargs):
         out = convert(src, **kwargs)
         return out
+
+    def convert_markdown_to_document(self, src, **kwargs):
+        """Convert Markdown and return the document docutils parses from it."""
+        _, pub = self.check_rst(convert(src, **kwargs))
+        return pub.document
+
+    def find_only_reference(self, src, **kwargs):
+        """Convert Markdown and return the one reference in the result."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(len(references), 1)
+        return references[0]
 
     def check_rst(self, rst):
         pub = Publisher(
@@ -118,8 +130,14 @@ class TestInlineMarkdown(RendererTestBase):
 
     def test_multiline_emphasis_with_link(self):
         src = "*first\nsecond [link](page) third\nfourth*"
-        expected = "\n*first\nsecond* `link <page>`_ *third\nfourth*\n"
-        self.assertEqual(self.conv(src), expected)
+        out = self.conv(src)
+        self.assertIn("*first\nsecond* ", out)
+        self.assertIn(" *third\nfourth*", out)
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_multiline_strong_with_code(self):
         src = "**first\nsecond `code` third\nfourth**"
@@ -461,23 +479,47 @@ class TestNoUnderscoreEmphasis(RendererTestBase):
 
     def test_nested_emphasis(self):
         src = "*a [link](page) and `code`* _plain_"
-        expected = "\n*a* `link <page>`_ *and* ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("*a* ", out)
+        self.assertIn(" *and* ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_nested_strong(self):
         src = "**a [link](page) and `code`** _plain_"
-        expected = "\n**a** `link <page>`_ **and** ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("**a** ", out)
+        self.assertIn(" **and** ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_nested_emphasis_after_text(self):
         src = "prefix *a [link](page) and `code`* _plain_"
-        expected = "\nprefix *a* `link <page>`_ *and* ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("prefix *a* ", out)
+        self.assertIn(" *and* ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_nested_strong_after_text(self):
         src = "prefix **a [link](page) and `code`** _plain_"
-        expected = "\nprefix **a** `link <page>`_ **and** ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("prefix **a** ", out)
+        self.assertIn(" **and** ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_asterisk_emphasis(self):
         src = "*hello*"
@@ -505,6 +547,100 @@ class TestNoUnderscoreEmphasis(RendererTestBase):
         self.assertIn("*emphasis*", out)
         self.assertIn("_underscored_", out)
         self.assertNotIn("*underscored*", out)
+
+
+class TestLinkWithInlineMarkup(RendererTestBase):
+    """Links keep the emphasis around them and the markup in their text."""
+
+    def test_strong_link_definition(self):
+        """Regression test for issue #36. The one test that pins a name."""
+        src = "our **[end to end](https://example.com)** example"
+        expected = """
+.. |m2r-link-fc8682c5ec06| replace:: \\ **end to end**
+.. _m2r-link-fc8682c5ec06: https://example.com
+
+
+our |m2r-link-fc8682c5ec06|_ example
+"""
+        self.assertEqual(self.conv(src), expected)
+
+    def test_strong_link(self):
+        reference = self.find_only_reference(
+            "our **[end to end](https://example.com)** example"
+        )
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
+
+    def test_emphasized_link(self):
+        reference = self.find_only_reference(
+            "our *[end to end](https://example.com)* example"
+        )
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
+
+    def test_emphasis_splits_around_the_link(self):
+        out = self.conv("**see [docs](https://example.com) here**")
+        self.assertIn("**see** ", out)
+        self.assertIn(" **here**", out)
+
+        reference = self.find_only_reference("**see [docs](https://example.com) here**")
+        self.assertEqual(reference.astext(), "docs")
+
+    def test_link_with_strong_text(self):
+        reference = self.find_only_reference("[**end to end**](https://example.com)")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
+
+    def test_link_with_code_text(self):
+        reference = self.find_only_reference(
+            "call [`run()`](https://example.com) first"
+        )
+        self.assertEqual(reference.astext(), "run()")
+        self.assertEqual(len(list(reference.findall(nodes.literal))), 1)
+
+    def test_link_with_partially_emphasized_text(self):
+        reference = self.find_only_reference("[*end* to end](https://example.com)")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
+
+    def test_anonymous_references_do_not_change_the_definition(self):
+        src = "our **[end to end](https://example.com)** example"
+        self.assertEqual(self.conv(src, anonymous_references=True), self.conv(src))
+
+    def test_repeated_link_is_defined_once(self):
+        src = "**[a](https://example.com)** and **[a](https://example.com)**"
+        out = self.conv(src)
+        self.assertEqual(out.count("replace::"), 1)
+
+        document = self.convert_markdown_to_document(src)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(
+            [reference["refuri"] for reference in references],
+            ["https://example.com", "https://example.com"],
+        )
+
+    def test_same_text_with_different_urls(self):
+        document = self.convert_markdown_to_document(
+            "**[a](https://example.com/1)** and **[a](https://example.com/2)**"
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in document.findall(nodes.reference)],
+            ["https://example.com/1", "https://example.com/2"],
+        )
+
+    def test_text_starting_like_a_block_marker(self):
+        """The escaped space opening a replacement keeps docutils reading text."""
+        for link_text, expected in (
+            ("1. Install `m2r2`", "1. Install m2r2"),
+            ("- `flag`", "- flag"),
+            (":f: `x`", ":f: x"),
+        ):
+            with self.subTest(link_text=link_text):
+                reference = self.find_only_reference(
+                    f"see [{link_text}](https://example.com) now"
+                )
+                self.assertEqual(reference.astext(), expected)
 
 
 class TestBlockQuote(RendererTestBase):

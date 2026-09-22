@@ -41,15 +41,25 @@ def record_role_definition(state: BlockState, name: str, definition: str) -> Non
     state.env.setdefault("role_definitions", {})[name] = definition
 
 
-def define_substitution(state: BlockState, name_prefix: str, directive: str) -> str:
+def define_substitution(
+    state: BlockState,
+    name_prefix: str,
+    directive: str,
+    target_url: str | None = None,
+) -> str:
     """Record a substitution the body references, and return the name to use.
 
     The name holds a hash of the directive, so the same content is defined once
     per document and an ``mdinclude`` can tell whether its host already has it.
+    A ``target_url`` adds the named target that turns the substitution into a
+    link.
     """
-    digest = sha256(directive.encode("utf-8")).hexdigest()
+    hashed = directive if target_url is None else f"{directive}\n{target_url}"
+    digest = sha256(hashed.encode("utf-8")).hexdigest()
     name = f"{name_prefix}-{digest[:SUBSTITUTION_NAME_HASH_LENGTH]}"
     definition = f".. |{name}| {directive}"
+    if target_url is not None:
+        definition += f"\n.. _{name}: {target_url}"
 
     definitions = state.env.setdefault("substitution_definitions", {})
     if definitions.get(name, definition) != definition:
@@ -66,6 +76,15 @@ def merge_adjacent_raw_html_roles(text: str) -> str:
     while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
         text = _RAW_HTML_MERGE_PATTERN.sub(rf":{RAW_HTML_ROLE_NAME}:`\1\2\3`", text)
     return text
+
+
+def trim_inline_escapes(text: str) -> str:
+    """Drop the escapes around an inline fragment taken out of a document.
+
+    A definition holds inline text that never sees the pass over the body, so
+    the escapes the renderer wrote at its edges have nothing left to separate.
+    """
+    return remove_redundant_inline_escapes(text.removeprefix("\\ ").removesuffix("\\ "))
 
 
 def remove_redundant_inline_escapes(text: str) -> str:
@@ -272,32 +291,34 @@ class RestRenderer(RSTRenderer):
 
     def link(self, token: dict[str, Any], state: BlockState) -> str:
         """Render a hyperlink or a Sphinx document reference."""
-        link = token["attrs"]["url"]
+        return self.render_link(token, state, emphasis_marker="")
+
+    def render_link(
+        self, token: dict[str, Any], state: BlockState, emphasis_marker: str
+    ) -> str:
+        """Render a hyperlink, a Sphinx cross-reference, or a linked image.
+
+        ``emphasis_marker`` is the RST emphasis around the link, empty for none.
+        """
+        url = token["attrs"]["url"]
         title = token["attrs"].get("title")
         children = token["children"]
         if len(children) == 1 and children[0]["type"] == "image":
-            return self.render_image(children[0], state, target=link)
-
-        text = self.render_children(token, state)
-
-        if self.anonymous_references:
-            underscore = "__"
-        else:
-            underscore = "_"
+            return self.render_image(children[0], state, target=url)
 
         if title:
+            text = self.render_children(token, state)
             return self._raw_html(
-                f'<a href="{html.escape(link)}" title="{html.escape(title)}">{text}</a>',
+                f'<a href="{html.escape(url)}" title="{html.escape(title)}">{text}</a>',
                 state,
             )
 
-        if not self.parse_relative_links:
-            return rf"\ `{text} <{link}>`{underscore}\ "
+        url_info = urlparse(url)
+        if not self.parse_relative_links or url_info.scheme != "":
+            return self.render_hyperlink_reference(token, state, url, emphasis_marker)
 
-        url_info = urlparse(link)
-        if url_info.scheme:
-            return rf"\ `{text} <{link}>`{underscore}\ "
-
+        # A Sphinx role holds plain text, so emphasis around the link is lost.
+        text = self.render_children(token, state)
         if url_info.fragment and not url_info.path:
             # Anchor-only link, e.g. [text](#anchor)
             return rf"\ :ref:`{text} <{url_info.fragment}>`\ "
@@ -307,6 +328,32 @@ class RestRenderer(RSTRenderer):
         # is intentionally discarded — matching the original m2r behavior.
         doc_link = os.path.splitext(url_info.path)[0]
         return rf"\ :doc:`{text} <{doc_link}>`\ "
+
+    def render_hyperlink_reference(
+        self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
+    ) -> str:
+        """Render a link to a URL, keeping emphasis around it and markup in its text."""
+        holds_only_text = all(
+            child["type"] in ("text", "softbreak") for child in token["children"]
+        )
+        if emphasis_marker == "" and holds_only_text:
+            text = self.render_children(token, state)
+            underscore = "__" if self.anonymous_references else "_"
+            return rf"\ `{text} <{url}>`{underscore}\ "
+
+        # RST cannot nest inline markup in a hyperlink reference, so the text
+        # goes in a substitution and a named target makes it a link. The
+        # replacement opens with an escaped space, which docutils drops, so that
+        # text starting with "- " or "1. " cannot turn into a list.
+        if emphasis_marker == "":
+            text = self.render_children(token, state)
+        else:
+            text = self.render_emphasis(token, state, emphasis_marker)
+        replacement = trim_inline_escapes(text).replace("\n", " ")
+        name = define_substitution(
+            state, "m2r-link", f"replace:: \\ {replacement}", target_url=url
+        )
+        return rf"\ |{name}|_\ "
 
     def heading(self, token, state):
         """Override to fix heading underlines for multibyte characters"""
@@ -356,7 +403,7 @@ class RestRenderer(RSTRenderer):
     ) -> str:
         """Render an image as a block directive or an inline substitution."""
         source = token["attrs"]["url"]
-        alt = self.render_children(token, state).replace("\n", " ")
+        alt = trim_inline_escapes(self.render_children(token, state)).replace("\n", " ")
         content = f"image:: {source}\n   :target: {target}\n   :alt: {alt}"
         if not inline:
             return f"\n\n.. {content}\n\n"
@@ -424,9 +471,14 @@ class RestRenderer(RSTRenderer):
         for child in token["children"]:
             if child["type"] in ("text", "softbreak", "standalone_hyperlink"):
                 text += self.render_token(child, state)
+                continue
+            parts.append(emphasize(text))
+            text = ""
+            if child["type"] == "link":
+                # A link carries the emphasis itself, since RST cannot nest one
+                # inside the other.
+                parts.append(self.render_link(child, state, emphasis_marker=marker))
             else:
-                parts.append(emphasize(text))
-                text = ""
                 parts.append(self.render_token(child, state))
         parts.append(emphasize(text))
         return "".join(parts)
@@ -544,7 +596,6 @@ def prepend_document_definitions(
     The definitions come first so that an ``mdinclude`` directive further down
     the document sees them already defined.
     """
-    body = cast("str", result)
     renderer = cast("RestRenderer", md.renderer)
     substitution_definitions = [
         definition
@@ -552,12 +603,16 @@ def prepend_document_definitions(
         if name not in renderer.existing_substitutions
     ]
 
+    # The definitions hold inline text that was cleaned when it was recorded,
+    # and escapes that docutils needs, so only the body is cleaned here.
+    body = remove_redundant_inline_escapes(
+        merge_adjacent_raw_html_roles("\n" + cast("str", result).lstrip("\n"))
+    )
+
     if len(substitution_definitions) > 0:
         document = "\n" + "\n\n".join(substitution_definitions) + "\n\n" + body
     else:
-        document = "\n" + body.lstrip("\n")
-
-    document = remove_redundant_inline_escapes(merge_adjacent_raw_html_roles(document))
+        document = body
 
     role_definitions = list(state.env.get("role_definitions", {}).values())
     if len(role_definitions) > 0:
