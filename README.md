@@ -108,8 +108,6 @@ work through an alias. The `convert` and `parse_from_file` functions remain avai
 Generated RST may use different spacing while preserving document content and
 structure. Standalone images keep block image directives. Images within text,
 headings, and table cells use substitutions so they can appear inline.
-RST cannot nest inline markup directly. M2R2 uses substitutions for links that
-contain markup or sit inside emphasis, so both formats survive.
 
 In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
 `no_underscore_emphasis`. The old name still works with a deprecation warning.
@@ -117,11 +115,13 @@ In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
 ### Upgrading to 2.0
 
 `M2R2` no longer accepts a custom `renderer`. Use `M2R2` for complete documents.
-Sphinx integrations can construct `SphinxM2R2` from the current docutils
-document. A `RestRenderer` used directly with Mistune renders only the document
-body and does not prepend its role or substitution definitions.
+Sphinx integrations can import `SphinxM2R2` from `m2r2.sphinx.converter` and
+construct it from the current docutils document. A `RestRenderer` used directly
+with Mistune renders only the document body and does not prepend its role or
+substitution definitions. Mistune 3.2 or newer is required.
 
-Links can now preserve emphasis around them and inline markup in their text.
+RST cannot nest inline markup directly. M2R2 uses substitutions so links can
+preserve emphasis around them and inline markup in their text.
 Links rendered as Sphinx roles remain plain text. Link titles are discarded,
 and generated substitution names are shorter.
 
@@ -183,10 +183,10 @@ with `/` starts at the Sphinx source directory.
 
 The directive accepts these options:
 
-* `start-line` and `end-line` select a slice of the file.
-* `lines` selects one-based lines and ranges such as `1, 3-5, 8-`. It comes
-  from Sphinx's `literalinclude`. It cannot be combined with `start-line`,
-  `end-line`, `literal`, or `code`.
+* `start-line` is zero-based and `end-line` is exclusive. For example,
+  `:start-line: 1` with `:end-line: 3` keeps the second and third lines.
+* `lines` selects one-based lines and ranges such as `1, 3-5, 8-`.
+  It cannot be combined with `start-line`, `end-line`, `literal`, or `code`.
 * `start-after` and `end-before` keep the text between two markers. Like
   docutils' `include`, each marker matches text rather than a whole line, and
   the marker itself is omitted. Line selection happens before marker matching.

@@ -12,13 +12,14 @@ import os
 import unicodedata
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
+from urllib.parse import unquote
 
 from docutils import nodes, utils
 from sphinx import addnodes
 from sphinx.util import docname_join, logging
 from sphinx.util.nodes import make_refnode, split_explicit_title
 
-from m2r2.rst.renderer import DOCUMENT_ANCHOR_ROLE_NAME
+from m2r2.rst.renderer import DOCUMENT_ANCHOR_ROLE_NAME, extract_visible_html_text
 
 if TYPE_CHECKING:
     from docutils.parsers.rst.states import Inliner
@@ -64,8 +65,10 @@ def assign_github_heading_slugs(titles: Iterable[str]) -> list[str]:
     return slugs
 
 
-def find_document_anchors(env: BuildEnvironment) -> dict[str, dict[str, str]]:
-    """Return the map from each document's anchors to its element ids."""
+def get_or_create_document_anchor_map(
+    env: BuildEnvironment,
+) -> dict[str, dict[str, str]]:
+    """Get or create the map from document anchors to element ids."""
     if not hasattr(env, "m2r2_document_anchors"):
         env.m2r2_document_anchors = {}
     return env.m2r2_document_anchors
@@ -74,16 +77,29 @@ def find_document_anchors(env: BuildEnvironment) -> dict[str, dict[str, str]]:
 def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
     """Record the ids and GitHub heading anchors of the document just read."""
     sections = list(doctree.findall(nodes.section))
-    titles = [section[0].astext() for section in sections]
+    titles = [extract_visible_heading_text(section[0]) for section in sections]
     slugs = assign_github_heading_slugs(titles)
     anchors = {slug: section["ids"][0] for slug, section in zip(slugs, sections)}
-    anchors.update({element_id: element_id for element_id in doctree.ids})
-    find_document_anchors(app.env)[app.env.docname] = anchors
+    for element_id in doctree.ids:
+        anchors.setdefault(element_id, element_id)
+    for name, is_explicit in doctree.nametypes.items():
+        if is_explicit:
+            anchors[name] = doctree.nameids[name]
+    get_or_create_document_anchor_map(app.env)[app.env.docname] = anchors
+
+
+def extract_visible_heading_text(node: nodes.Node) -> str:
+    """Return heading text without HTML tags."""
+    if isinstance(node, nodes.raw):
+        return extract_visible_html_text(node.astext())
+    if isinstance(node, nodes.Text):
+        return node.astext()
+    return "".join(extract_visible_heading_text(child) for child in node.children)
 
 
 def forget_document_anchors(app: Sphinx, env: BuildEnvironment, docname: str) -> None:
     """Drop the anchors of a document Sphinx is about to read again."""
-    find_document_anchors(env).pop(docname, None)
+    get_or_create_document_anchor_map(env).pop(docname, None)
 
 
 def merge_document_anchors(
@@ -93,8 +109,8 @@ def merge_document_anchors(
     other: BuildEnvironment,
 ) -> None:
     """Take the anchors a worker process of a parallel build recorded."""
-    anchors = find_document_anchors(env)
-    other_anchors = find_document_anchors(other)
+    anchors = get_or_create_document_anchor_map(env)
+    other_anchors = get_or_create_document_anchor_map(other)
     for docname in docnames:
         anchors[docname] = other_anchors[docname]
 
@@ -110,6 +126,11 @@ def create_document_anchor_reference(
 ) -> tuple[list[nodes.Node], list[nodes.system_message]]:
     """Create a reference that resolves from a document anchor."""
     has_title, title, target = split_explicit_title(utils.unescape(text))
+    path, _, _ = target.partition("#")
+    if path != "":
+        env = inliner.document.settings.env
+        target_docname = docname_join(env.docname, os.path.splitext(unquote(path))[0])
+        env.note_dependency(env.doc2path(target_docname))
     reference = addnodes.pending_xref(
         rawtext,
         refdomain="",
@@ -136,12 +157,15 @@ def resolve_document_anchor_reference(
     if node["reftype"] != DOCUMENT_ANCHOR_ROLE_NAME:
         return None
 
-    path, _, slug = node["reftarget"].partition("#")
+    path, _, fragment = node["reftarget"].partition("#")
+    slug = unquote(fragment)
     source_docname = node["refdoc"]
     if path == "":
         target_docname = source_docname
     else:
-        target_docname = docname_join(source_docname, os.path.splitext(path)[0])
+        target_docname = docname_join(
+            source_docname, os.path.splitext(unquote(path))[0]
+        )
 
     if target_docname not in env.found_docs:
         logger.warning(
@@ -154,7 +178,7 @@ def resolve_document_anchor_reference(
         )
         return contnode
 
-    element_id = find_document_anchors(env)[target_docname].get(slug)
+    element_id = get_or_create_document_anchor_map(env)[target_docname].get(slug)
     if element_id is None:
         logger.warning(
             "m2r2 found no anchor #%s in %r",

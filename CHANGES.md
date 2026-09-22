@@ -2,6 +2,7 @@
 
 #### Breaking changes
 
+* Require Mistune 3.2 or newer so footnote rendering shares document definitions.
 * Remove the `renderer` argument from `M2R2`. `SphinxM2R2` constructs a converter from a docutils document for Sphinx integrations.
 * Make `RestRenderer` render only the document body when it is used directly with Mistune. `M2R2` writes the role and substitution definitions for a complete document.
 * Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.

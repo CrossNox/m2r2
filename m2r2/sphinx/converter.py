@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from m2r2.m2r2 import M2R2
 from m2r2.rst.renderer import RestRenderer
@@ -27,10 +27,18 @@ class SphinxM2R2(M2R2):
             use_mermaid=config.m2r_use_mermaid,
         )
 
-    def build_rest_renderer(self, **options: Any) -> RestRenderer:
+    def build_rest_renderer(
+        self,
+        *,
+        parse_relative_links: bool,
+        anonymous_references: bool,
+        use_mermaid: bool,
+    ) -> RestRenderer:
         """Build a renderer that writes RST for the document being built."""
         return RestRenderer(
+            parse_relative_links=parse_relative_links,
+            anonymous_references=anonymous_references,
+            use_mermaid=use_mermaid,
             is_sphinx=True,
             existing_substitutions=self.document.substitution_defs,
-            **options,
         )

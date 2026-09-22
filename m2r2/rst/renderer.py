@@ -6,6 +6,7 @@ import re
 from collections.abc import Container, Iterable, Iterator
 from contextlib import contextmanager
 from hashlib import sha256
+from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 from urllib.parse import urlparse
 
@@ -23,9 +24,31 @@ RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: ht
 #: The role m2r2's Sphinx extension resolves as a link to a document anchor.
 DOCUMENT_ANCHOR_ROLE_NAME = "m2r-anchor"
 
-#: Hex characters of the hash a substitution is named after. Twelve leaves the
-#: chance of two substitutions colliding in one document near one in a billion.
+#: Hex characters of the hash used to name a substitution.
 SUBSTITUTION_NAME_HASH_LENGTH = 12
+
+
+class VisibleHtmlTextParser(HTMLParser):
+    """Collect visible text from HTML fragments."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def get_text(self) -> str:
+        """Return the visible text collected from HTML."""
+        return "".join(self.parts)
+
+
+def extract_visible_html_text(fragment: str) -> str:
+    """Extract visible text from an HTML fragment."""
+    parser = VisibleHtmlTextParser()
+    parser.feed(fragment)
+    parser.close()
+    return parser.get_text()
 
 
 class SubstitutionNameCollision(Exception):
@@ -108,11 +131,24 @@ def flatten_to_plain_text(token: dict[str, Any]) -> str:
     A Sphinx role and a section title both read plain text, so a link rendered
     into either one has to give up the markup inside it.
     """
-    if token["type"] in ("text", "codespan"):
+    token_type = token["type"]
+    if token_type in ("text", "codespan", "standalone_hyperlink"):
         return str(token.get("raw", ""))
-    if token["type"] == "softbreak":
+    if token_type == "inline_math":
+        return str(token["math"])
+    if token_type in ("rest_role", "rest_link"):
+        return str(token["text"]).split("`", 2)[1].split(" <", 1)[0]
+    if token_type == "rst_footnote_ref":
+        return str(token["text"])
+    if token_type == "eol_literal_marker":
+        return str(token["marker"])
+    if token_type == "inline_html":
+        return extract_visible_html_text(str(token["raw"]))
+    if token_type in ("softbreak", "linebreak"):
         return " "
-    return "".join(flatten_to_plain_text(child) for child in token.get("children", []))
+    if "children" in token:
+        return "".join(flatten_to_plain_text(child) for child in token["children"])
+    raise ValueError(f"Cannot flatten inline token {token_type!r}")
 
 
 def escape_reference_characters(text: str) -> str:
@@ -137,7 +173,7 @@ def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
 
     kept = []
     for child in children:
-        if child["type"] == "footnote_ref":
+        if child["type"] in ("footnote_ref", "rst_footnote_ref"):
             removed.append(child)
             continue
         removed.extend(remove_footnote_references(child))
@@ -478,11 +514,17 @@ class RestRenderer(RSTRenderer):
                 text = self.render_children(token, state)
             else:
                 text = self.render_emphasis(token, state, emphasis_marker)
-        replacement = trim_inline_escapes(text).replace("\n", " ")
+        replacement = self.prepare_substitution_text(text)
         name = define_substitution(
             state, "m2r-link", f"replace:: \\ {replacement}", target_url=url
         )
         return rf"\ |{name}|_\ "
+
+    def prepare_substitution_text(self, text: str) -> str:
+        """Normalize inline text for an RST substitution definition."""
+        return merge_adjacent_raw_html_roles(trim_inline_escapes(text)).replace(
+            "\n", " "
+        )
 
     def heading(self, token, state):
         """Override to fix heading underlines for multibyte characters"""
@@ -594,8 +636,7 @@ class RestRenderer(RSTRenderer):
     def strikethrough(self, token, state):
         """Render strikethrough as raw HTML, with the footnote references after it.
 
-        A footnote reference has no HTML form, so it follows the struck text the
-        way it follows a link.
+        This renderer moves footnote references after the struck text.
         """
         footnote_references = remove_footnote_references(token)
         text = self.strikethrough_html_renderer.render_tokens(token["children"], state)
@@ -775,7 +816,7 @@ def prepend_document_definitions(
     return document
 
 
-def write_document_definitions(md: Markdown) -> None:
+def register_document_definition_hook(md: Markdown) -> None:
     """Register the hook that writes definitions above a rendered document.
 
     Mistune runs after-render hooks in registration order, so this plugin goes

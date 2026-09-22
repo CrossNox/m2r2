@@ -120,8 +120,8 @@ class MdInclude(rst.Directive):
     def clip_text_between_markers(self, text):
         """Keep the text after the start-after marker and before the end-before one.
 
-        Each marker goes with everything on its far side, as docutils' include
-        does. A marker the text lacks is a severe error.
+        Exclude both markers, as docutils' include does. A missing marker is a
+        severe error.
         """
         start_marker = self.options.get("start-after")
         if start_marker is not None:

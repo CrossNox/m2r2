@@ -513,6 +513,13 @@ class TestTextEscaping(RendererTestBase):
         image = next(document.findall(nodes.image))
         self.assertEqual(image["alt"], "a \\ b | c")
 
+    def test_image_alt_keeps_inline_math_and_rst_role_text(self):
+        document = self.convert_markdown_to_document(
+            "![a `$x$` :code:`y` b](image.png)"
+        )
+        image = next(document.findall(nodes.image))
+        self.assertEqual(image["alt"], "a x y b")
+
 
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
@@ -653,6 +660,40 @@ our |m2r-link-fc8682c5ec06|_ example
         reference = self.find_only_reference("[*end* to end](https://example.com)")
         self.assertEqual(reference.astext(), "end to end")
         self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
+
+    def test_rst_footnote_reference_follows_link(self):
+        document = self.convert_markdown_to_document(
+            "[text [#note]_](https://example.org)\n\n.. [#note] Note."
+        )
+        links = [
+            reference
+            for reference in document.findall(nodes.reference)
+            if reference.get("refuri") == "https://example.org"
+        ]
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].astext(), "text")
+        self.assertEqual(len(list(document.findall(nodes.footnote_reference))), 1)
+        self.assertEqual(list(links[0].findall(nodes.footnote_reference)), [])
+
+    def test_nested_rst_footnote_reference_follows_link(self):
+        document = self.convert_markdown_to_document(
+            "[**text [#note]_**](https://example.org)\n\n.. [#note] Note."
+        )
+        links = [
+            reference
+            for reference in document.findall(nodes.reference)
+            if reference.get("refuri") == "https://example.org"
+        ]
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].astext(), "text")
+        self.assertEqual(len(list(links[0].findall(nodes.strong))), 1)
+        self.assertEqual(len(list(document.findall(nodes.footnote_reference))), 1)
+
+    def test_html_inside_link_is_one_raw_node(self):
+        reference = self.find_only_reference("[<b>bold</b>](https://example.org)")
+        raw_nodes = list(reference.findall(nodes.raw))
+        self.assertEqual(len(raw_nodes), 1)
+        self.assertEqual(raw_nodes[0].astext(), "<b>bold</b>")
 
     def test_anonymous_references_do_not_change_the_definition(self):
         src = "our **[end to end](https://example.com)** example"
@@ -1818,6 +1859,11 @@ text[^1]
         name = "m2r-image-4117ba719ca0"
         self.assertEqual(out.count(f".. |{name}| image::"), 1)
         self.assertLess(out.index(f".. |{name}| image::"), out.index("text\\ [#fn-1]_"))
+
+    def test_html_only_in_footnote_has_role_definition(self):
+        src = "text[^1]\n\n[^1]: <b>note</b>"
+        out = self.conv(src)
+        self.assertIn(RAW_HTML_ROLE_DEFINITION, out)
 
     def test_image_in_body_and_footnote_is_defined_once(self):
         src = """\

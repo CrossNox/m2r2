@@ -11,7 +11,7 @@ from sphinx.testing.util import SphinxTestApp
 
 from m2r2.sphinx.anchors import (
     assign_github_heading_slugs,
-    find_document_anchors,
+    get_or_create_document_anchor_map,
     slugify_heading_like_github,
 )
 
@@ -105,10 +105,11 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
             "bugfixes-1": section_ids[2],
             "version-10": section_ids[3],
         }
-        expected_anchors.update({section_id: section_id for section_id in section_ids})
+        for section_id in section_ids:
+            expected_anchors.setdefault(section_id, section_id)
 
         self.assertEqual(
-            find_document_anchors(app.env)["index"],
+            get_or_create_document_anchor_map(app.env)["index"],
             expected_anchors,
         )
 
@@ -122,7 +123,7 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
         )
         app, _ = self.build_project(srcdir, parallel=2)
 
-        anchors = find_document_anchors(app.env)
+        anchors = get_or_create_document_anchor_map(app.env)
         for number in range(6):
             with self.subTest(page=number):
                 self.assertEqual(
@@ -137,7 +138,9 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
         (srcdir / "index.md").write_text("# Title\n\ntext\n")
         app, _ = self.build_project(srcdir, freshenv=False)
 
-        self.assertEqual(set(find_document_anchors(app.env)["index"]), {"title"})
+        self.assertEqual(
+            set(get_or_create_document_anchor_map(app.env)["index"]), {"title"}
+        )
 
 
 class TestDocumentAnchorLinks(AnchorProjectTestBase):
@@ -153,6 +156,17 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
     def read_built_page(self, app, docname):
         return (Path(app.outdir) / f"{docname}.html").read_text()
 
+    def find_reference_to_text(self, app, docname, text):
+        """Return the resolved reference with the given link text."""
+        doctree = app.env.get_and_resolve_doctree(docname, app.builder)
+        references = [
+            reference
+            for reference in doctree.findall(nodes.reference)
+            if reference.astext() == text
+        ]
+        self.assertEqual(len(references), 1)
+        return references[0]
+
     def test_link_to_a_repeated_heading(self):
         srcdir = self.create_project(
             {
@@ -166,8 +180,9 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
 
         self.assertNotIn("m2r2", warning)
         second_bugfixes_id = self.find_section_ids(app, "index")[2]
-        self.assertIn(
-            f'href="#{second_bugfixes_id}"', self.read_built_page(app, "index")
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "the second")["refid"],
+            second_bugfixes_id,
         )
 
     def test_link_to_a_heading_with_punctuation(self):
@@ -178,7 +193,9 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
 
         self.assertNotIn("m2r2", warning)
         version_id = self.find_section_ids(app, "index")[1]
-        self.assertIn(f'href="#{version_id}"', self.read_built_page(app, "index"))
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "it")["refid"], version_id
+        )
 
     def test_link_to_a_heading_on_another_page(self):
         srcdir = self.create_project(
@@ -195,9 +212,9 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
 
         self.assertNotIn("m2r2", warning)
         second_bugfixes_id = self.find_section_ids(app, "other")[2]
-        self.assertIn(
-            f'href="other.html#{second_bugfixes_id}"',
-            self.read_built_page(app, "index"),
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "fixes")["refuri"],
+            f"other.html#{second_bugfixes_id}",
         )
 
     def test_link_to_a_label_on_the_same_page(self):
@@ -212,7 +229,9 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         app, warning = self.build_project(srcdir)
 
         self.assertNotIn("m2r2", warning)
-        self.assertIn('href="#details"', self.read_built_page(app, "index"))
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "details")["refid"], "details"
+        )
 
     def test_link_to_a_label_on_another_page(self):
         srcdir = self.create_project(
@@ -228,7 +247,10 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         app, warning = self.build_project(srcdir)
 
         self.assertNotIn("m2r2", warning)
-        self.assertIn('href="other.html#details"', self.read_built_page(app, "index"))
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "details")["refuri"],
+            "other.html#details",
+        )
 
     def test_label_wins_over_a_matching_github_heading_anchor(self):
         srcdir = self.create_project(
@@ -243,7 +265,85 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         app, warning = self.build_project(srcdir)
 
         self.assertNotIn("m2r2", warning)
-        self.assertIn('href="#version-10"', self.read_built_page(app, "index"))
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "details")["refid"],
+            "version-10",
+        )
+
+    def test_automatic_section_id_does_not_override_a_github_anchor(self):
+        srcdir = self.create_project(
+            {
+                "index.md": "# Title\n\n## Foo\n\n## Foo\n\n## Foo 1\n\n[second](#foo-1)\n"
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        second_foo_id = self.find_section_ids(app, "index")[2]
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "second")["refid"], second_foo_id
+        )
+
+    def test_unicode_heading_anchor_resolves_from_encoded_or_plain_destination(self):
+        srcdir = self.create_project(
+            {"index.md": "# Title\n\n## Café\n\n[plain](#café) [encoded](#caf%C3%A9)\n"}
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        section_id = self.find_section_ids(app, "index")[1]
+        for text in ("plain", "encoded"):
+            self.assertEqual(
+                self.find_reference_to_text(app, "index", text)["refid"], section_id
+            )
+
+    def test_inline_math_link_text_is_kept(self):
+        srcdir = self.create_project(
+            {"index.md": "# Title\n\n## Part\n\n[`$x$`](#part)\n"}
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "x")["refid"],
+            self.find_section_ids(app, "index")[1],
+        )
+
+    def test_encoded_document_path_resolves(self):
+        srcdir = self.create_project(
+            {
+                "index.md": "# Index\n\n[there](caf%C3%A9.md#part)\n\n.. toctree::\n\n   café\n",
+                "café.md": "# Café\n\n## Part\n",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "there")["refuri"],
+            f"caf%C3%A9.html#{self.find_section_ids(app, 'café')[1]}",
+        )
+
+    def test_heading_with_html_or_strikethrough_resolves(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Title\n\n## ~~Old~~ Part\n\n## <em>New</em> Part\n\n"
+                    "[old](#old-part) [new](#new-part)\n"
+                )
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        section_ids = self.find_section_ids(app, "index")
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "old")["refid"], section_ids[1]
+        )
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "new")["refid"], section_ids[2]
+        )
 
     def test_link_to_another_page_without_relative_links_stays_an_href(self):
         srcdir = self.create_project(
@@ -293,7 +393,9 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
 
         self.assertNotIn("m2r2", warning)
         bugfixes_id = self.find_section_ids(app, "index")[1]
-        self.assertIn(f'href="#{bugfixes_id}"', self.read_built_page(app, "index"))
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "fixes")["refid"], bugfixes_id
+        )
 
     def test_rebuild_still_resolves_links_to_an_unchanged_page(self):
         files = {
@@ -315,6 +417,32 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         part_id = self.find_section_ids(app, "other")[1]
         self.assertIn(
             f'href="other.html#{part_id}"', self.read_built_page(app, "index")
+        )
+
+    def test_rebuild_rewrites_links_when_target_section_ids_change(self):
+        srcdir = self.create_project(
+            {
+                "index.md": "# Index\n\n.. toctree::\n\n   source\n   target\n",
+                "source.md": "# Source\n\n[second](target.md#part-1)\n",
+                "target.md": "# Target\n\n## Part\n\n## Part\n",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        first_app, first_warning = self.build_project(srcdir)
+        self.assertNotIn("m2r2", first_warning)
+        old_id = self.find_section_ids(first_app, "target")[2]
+        first_app.cleanup()
+
+        (srcdir / "target.md").write_text(
+            "# Target\n\n## Extra\n\n## Extra\n\n## Part\n\n## Part\n"
+        )
+        app, warning = self.build_project(srcdir, freshenv=False)
+
+        self.assertNotIn("m2r2", warning)
+        new_id = self.find_section_ids(app, "target")[4]
+        self.assertNotEqual(old_id, new_id)
+        self.assertIn(
+            f'href="target.html#{new_id}"', self.read_built_page(app, "source")
         )
 
     def test_parallel_build_resolves_links(self):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from importlib.metadata import version
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import mistune
 from mistune.plugins.footnotes import footnotes
@@ -14,7 +14,7 @@ from m2r2.rst.plugins import (
     configure_markdown_parser_for_rst,
     parse_literal_underscore,
 )
-from m2r2.rst.renderer import RestRenderer, write_document_definitions
+from m2r2.rst.renderer import RestRenderer, register_document_definition_hook
 
 if TYPE_CHECKING:
     from mistune.plugins import Plugin
@@ -59,7 +59,7 @@ class M2R2:
                     before="emphasis",
                 )
 
-        # write_document_definitions goes last so its hook runs after the one
+        # The definition hook goes last so it runs after the one
         # the footnote plugin registers.
         plugins.extend(
             [
@@ -67,16 +67,26 @@ class M2R2:
                 table,
                 footnotes,
                 strikethrough,
-                write_document_definitions,
+                register_document_definition_hook,
             ]
         )
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=self.renderer, plugins=plugins)
 
-    def build_rest_renderer(self, **options: Any) -> RestRenderer:
+    def build_rest_renderer(
+        self,
+        *,
+        parse_relative_links: bool,
+        anonymous_references: bool,
+        use_mermaid: bool,
+    ) -> RestRenderer:
         """Build the renderer that turns Markdown tokens into RST."""
-        return RestRenderer(**options)
+        return RestRenderer(
+            parse_relative_links=parse_relative_links,
+            anonymous_references=anonymous_references,
+            use_mermaid=use_mermaid,
+        )
 
     def parse(self, s: str) -> str:
         """Convert one Markdown document to RST."""

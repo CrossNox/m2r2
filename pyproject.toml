@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Text Processing :: Markup :: Markdown",
   "Topic :: Text Processing :: Markup :: reStructuredText",
 ]
-dependencies = ["mistune>=3.0,<3.3", "docutils>=0.19"]
+dependencies = ["mistune>=3.2,<3.3", "docutils>=0.19"]
 
 [project.optional-dependencies]
 sphinx = ["sphinx>=1.7.0"]
