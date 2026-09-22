@@ -516,6 +516,77 @@ second
         self.assertNotIn("first", html)
         self.assertIn("second", html)
 
+    def build_include_between_markers(self, options):
+        """Include a Markdown file with three sections and the given options."""
+        return self.build_html_project_with_m2r2(
+            source_files_by_name={
+                "index.rst": "Test\n====\n\n.. mdinclude:: included.txt\n"
+                + "".join(f"   :{name}: {value}\n" for name, value in options.items()),
+                "included.txt": """\
+before
+
+<!-- docs-start -->
+
+inside
+
+<!-- docs-end -->
+
+after
+""",
+            }
+        )
+
+    def test_start_after_marker(self):
+        _, outdir, warning = self.build_include_between_markers(
+            {"start-after": "<!-- docs-start -->"}
+        )
+        self.assertEqual(warning, "")
+        html = (outdir / "index.html").read_text()
+        self.assertNotIn("before", html)
+        self.assertNotIn("docs-start", html)
+        self.assertIn("inside", html)
+        self.assertIn("after", html)
+
+    def test_end_before_marker(self):
+        _, outdir, warning = self.build_include_between_markers(
+            {"end-before": "<!-- docs-end -->"}
+        )
+        self.assertEqual(warning, "")
+        html = (outdir / "index.html").read_text()
+        self.assertIn("before", html)
+        self.assertIn("inside", html)
+        self.assertNotIn("docs-end", html)
+        self.assertNotIn("after", html)
+
+    def test_both_markers(self):
+        _, outdir, warning = self.build_include_between_markers(
+            {"start-after": "<!-- docs-start -->", "end-before": "<!-- docs-end -->"}
+        )
+        self.assertEqual(warning, "")
+        html = (outdir / "index.html").read_text()
+        self.assertNotIn("before", html)
+        self.assertIn("inside", html)
+        self.assertNotIn("after", html)
+
+    def test_markers_apply_after_line_numbers(self):
+        """Cutting the lines that hold the start marker leaves nothing to find."""
+        _, _, warning = self.build_include_between_markers(
+            {"start-line": "4", "start-after": "<!-- docs-start -->"}
+        )
+        self.assertIn(
+            'Problem with "start-after" option of "mdinclude" directive:\nText not found.',
+            warning,
+        )
+
+    def test_missing_marker_is_a_severe_error(self):
+        _, _, warning = self.build_include_between_markers(
+            {"start-after": "<!-- nowhere -->"}
+        )
+        self.assertIn(
+            'Problem with "start-after" option of "mdinclude" directive:\nText not found.',
+            warning,
+        )
+
     def test_include_with_config_options(self):
         """mdinclude should respect Sphinx m2r2 config."""
         _, outdir, _ = self.build_html_project_with_m2r2(

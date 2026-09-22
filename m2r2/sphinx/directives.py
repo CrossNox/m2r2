@@ -20,6 +20,8 @@ class MdInclude(rst.Directive):
     option_spec: ClassVar[dict] = {
         "start-line": int,
         "end-line": int,
+        "start-after": directives.unchanged_required,
+        "end-before": directives.unchanged_required,
         "encoding": directives.encoding,
         "tab-width": int,
     }
@@ -32,6 +34,34 @@ class MdInclude(rst.Directive):
         resolved_path = os.path.normpath(os.path.join(source_directory, include_path))
 
         return utils.relative_path(None, resolved_path)
+
+    def clip_text_between_markers(self, text):
+        """Keep the text after the start-after marker and before the end-before one.
+
+        Each marker goes with everything on its far side, as docutils' include
+        does. A marker the text lacks is a severe error.
+        """
+        start_marker = self.options.get("start-after")
+        if start_marker is not None:
+            start_index = text.find(start_marker)
+            if start_index < 0:
+                raise self.severe(
+                    f'Problem with "start-after" option of "{self.name}" '
+                    "directive:\nText not found."
+                )
+            text = text[start_index + len(start_marker) :]
+
+        end_marker = self.options.get("end-before")
+        if end_marker is not None:
+            end_index = text.find(end_marker)
+            if end_index < 0:
+                raise self.severe(
+                    f'Problem with "end-before" option of "{self.name}" '
+                    "directive:\nText not found."
+                )
+            text = text[:end_index]
+
+        return text
 
     def run(self):
         settings = self.state.document.settings
@@ -73,6 +103,8 @@ class MdInclude(rst.Directive):
             raise self.severe(
                 f'Problem with "{self.name}" directive:\n{io.error_string(error)}'
             ) from error
+
+        raw_text = self.clip_text_between_markers(raw_text)
 
         converter = SphinxM2R2(self.state.document)
         include_lines = statemachine.string2lines(
