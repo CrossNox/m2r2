@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
 
-#: The role m2r2's Sphinx extension resolves as a link to a Markdown heading.
-HEADING_ANCHOR_ROLE_NAME = "m2r-anchor"
+#: The role m2r2's Sphinx extension resolves as a link to a document anchor.
+DOCUMENT_ANCHOR_ROLE_NAME = "m2r-anchor"
 
 #: Hex characters of the hash a substitution is named after. Twelve leaves the
 #: chance of two substitutions colliding in one document near one in a billion.
@@ -425,13 +425,13 @@ class RestRenderer(RSTRenderer):
 
         # A Sphinx role holds plain text, so in either role below the markup in
         # the link text and the emphasis around the link are both lost.
-        links_to_a_heading = url_info.fragment != "" and (
+        links_to_an_anchor = url_info.fragment != "" and (
             url_info.path == "" or self.parse_relative_links
         )
-        if self.is_sphinx and points_inside_project and links_to_a_heading:
-            # Sphinx resolves the fragment as the anchor GitHub gives a heading.
+        if self.is_sphinx and points_inside_project and links_to_an_anchor:
+            # Sphinx resolves the fragment as a document id or a GitHub heading anchor.
             text = flatten_to_plain_text(token)
-            return rf"\ :{HEADING_ANCHOR_ROLE_NAME}:`{text} <{url}>`\ "
+            return rf"\ :{DOCUMENT_ANCHOR_ROLE_NAME}:`{text} <{url}>`\ "
 
         if not points_inside_project or not self.parse_relative_links:
             return self.render_hyperlink_reference(token, state, url, emphasis_marker)

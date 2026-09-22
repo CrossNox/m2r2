@@ -11,7 +11,7 @@ from sphinx.testing.util import SphinxTestApp
 
 from m2r2.sphinx.anchors import (
     assign_github_heading_slugs,
-    find_heading_anchors,
+    find_document_anchors,
     slugify_heading_like_github,
 )
 
@@ -81,8 +81,8 @@ class AnchorProjectTestBase(TestCase):
         return app, warning.getvalue()
 
 
-class TestHeadingAnchorMap(AnchorProjectTestBase):
-    """Each document records which section every GitHub anchor names."""
+class TestDocumentAnchorMap(AnchorProjectTestBase):
+    """Each document records its ids and GitHub heading anchors."""
 
     def test_anchors_name_the_sections_in_order(self):
         srcdir = self.create_project(
@@ -99,14 +99,17 @@ class TestHeadingAnchorMap(AnchorProjectTestBase):
             section["ids"][0]
             for section in app.env.get_doctree("index").findall(nodes.section)
         ]
+        expected_anchors = {
+            "title": section_ids[0],
+            "bugfixes": section_ids[1],
+            "bugfixes-1": section_ids[2],
+            "version-10": section_ids[3],
+        }
+        expected_anchors.update({section_id: section_id for section_id in section_ids})
+
         self.assertEqual(
-            find_heading_anchors(app.env)["index"],
-            {
-                "title": section_ids[0],
-                "bugfixes": section_ids[1],
-                "bugfixes-1": section_ids[2],
-                "version-10": section_ids[3],
-            },
+            find_document_anchors(app.env)["index"],
+            expected_anchors,
         )
 
     def test_parallel_build_merges_every_document(self):
@@ -119,7 +122,7 @@ class TestHeadingAnchorMap(AnchorProjectTestBase):
         )
         app, _ = self.build_project(srcdir, parallel=2)
 
-        anchors = find_heading_anchors(app.env)
+        anchors = find_document_anchors(app.env)
         for number in range(6):
             with self.subTest(page=number):
                 self.assertEqual(
@@ -134,11 +137,11 @@ class TestHeadingAnchorMap(AnchorProjectTestBase):
         (srcdir / "index.md").write_text("# Title\n\ntext\n")
         app, _ = self.build_project(srcdir, freshenv=False)
 
-        self.assertEqual(set(find_heading_anchors(app.env)["index"]), {"title"})
+        self.assertEqual(set(find_document_anchors(app.env)["index"]), {"title"})
 
 
-class TestHeadingAnchorLinks(AnchorProjectTestBase):
-    """Links to a heading's GitHub anchor land on the right section."""
+class TestDocumentAnchorLinks(AnchorProjectTestBase):
+    """Links to document anchors land on the right elements."""
 
     def find_section_ids(self, app, docname):
         """Return the ids Sphinx gave the sections of a document, in order."""
@@ -197,6 +200,51 @@ class TestHeadingAnchorLinks(AnchorProjectTestBase):
             self.read_built_page(app, "index"),
         )
 
+    def test_link_to_a_label_on_the_same_page(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Title\n\nSee [details](#details).\n\n"
+                    ".. _details:\n\n## More information\n"
+                ),
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        self.assertIn('href="#details"', self.read_built_page(app, "index"))
+
+    def test_link_to_a_label_on_another_page(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Index\n\nSee [details](other.md#details).\n\n"
+                    ".. toctree::\n\n   other\n"
+                ),
+                "other.md": "# Other\n\n.. _details:\n\n## More information\n",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        self.assertIn('href="other.html#details"', self.read_built_page(app, "index"))
+
+    def test_label_wins_over_a_matching_github_heading_anchor(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Title\n\nSee [details](#version-10).\n\n"
+                    "## Version 1.0\n\nHeading target.\n\n"
+                    ".. _version-10:\n\n## Label target\n"
+                ),
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        self.assertIn('href="#version-10"', self.read_built_page(app, "index"))
+
     def test_link_to_another_page_without_relative_links_stays_an_href(self):
         srcdir = self.create_project(
             {
@@ -215,9 +263,7 @@ class TestHeadingAnchorLinks(AnchorProjectTestBase):
         srcdir = self.create_project({"index.md": "# Title\n\nSee [it](#nowhere).\n"})
         app, warning = self.build_project(srcdir)
 
-        self.assertIn(
-            "m2r2 found no heading with the anchor #nowhere in 'index'", warning
-        )
+        self.assertIn("m2r2 found no anchor #nowhere in 'index'", warning)
         self.assertIn("<p>See <span>it</span>.</p>", self.read_built_page(app, "index"))
 
     def test_link_to_a_missing_document_warns(self):

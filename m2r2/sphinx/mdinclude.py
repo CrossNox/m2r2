@@ -16,9 +16,9 @@ def warn_deprecated_config(app):
 
 
 def setup(app):
-    """Register m2r2 config values, the mdinclude directive and heading links."""
+    """Register m2r2 config values, mdinclude and document anchor links."""
     # m2r2 works without Sphinx installed, and m2r2/__init__.py imports this module
-    from m2r2.sphinx.anchors import register_heading_anchors
+    from m2r2.sphinx.anchors import register_document_anchors
 
     # Deprecated name kept for backward compatibility
     app.add_config_value("no_underscore_emphasis", False, "env")
@@ -37,7 +37,7 @@ def setup(app):
     )
     app.connect("builder-inited", warn_deprecated_config)
     app.add_directive("mdinclude", MdInclude)
-    register_heading_anchors(app)
+    register_document_anchors(app)
     return {
         "version": __version__,
         "parallel_read_safe": True,
