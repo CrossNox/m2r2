@@ -690,6 +690,34 @@ our |m2r-link-fc8682c5ec06|_ example
             "the spec draft",
         )
 
+    def test_image_in_link_text_has_no_target_of_its_own(self):
+        src = "[![logo](https://example.com/logo.png) Project](https://example.com)"
+        out = self.conv(src)
+        self.assertNotIn(":target:", out)
+
+        document = self.convert_markdown_to_document(src)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(len(references), 1)
+        self.assertEqual(references[0]["refuri"], "https://example.com")
+        self.assertEqual(len(list(references[0].findall(nodes.image))), 1)
+
+    def test_url_in_link_text_stays_text(self):
+        reference = self.find_only_reference(
+            "[`m2r2` at https://pypi.org/project/m2r2](https://example.com)"
+        )
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "m2r2 at https://pypi.org/project/m2r2")
+
+    def test_email_in_link_text_stays_text(self):
+        reference = self.find_only_reference(
+            "[`m2r2` by dev@example.com](https://example.com)"
+        )
+        self.assertEqual(reference.astext(), "m2r2 by dev@example.com")
+
+    def test_reference_like_word_in_link_text_stays_text(self):
+        reference = self.find_only_reference("[`m2r2` foo_](https://example.com)")
+        self.assertEqual(reference.astext(), "m2r2 foo_")
+
     def test_text_starting_like_a_block_marker(self):
         """The escaped space opening a replacement keeps docutils reading text."""
         for link_text, expected in (

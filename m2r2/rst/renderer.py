@@ -3,7 +3,8 @@ from __future__ import annotations
 import html
 import os
 import re
-from collections.abc import Container, Iterable
+from collections.abc import Container, Iterable, Iterator
+from contextlib import contextmanager
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 from urllib.parse import urlparse
@@ -69,6 +70,28 @@ def define_substitution(
     definitions[name] = definition
 
     return name
+
+
+@contextmanager
+def rendering_link_text(state: BlockState) -> Iterator[None]:
+    """Mark what is rendered next as the text of a link."""
+    state.env["inside_link_text"] = True
+    yield
+    state.env["inside_link_text"] = False
+
+
+def is_inside_link_text(state: BlockState) -> bool:
+    """Tell whether the renderer is inside the text of a link."""
+    return state.env.get("inside_link_text", False)
+
+
+def escape_reference_characters(text: str) -> str:
+    """Escape what docutils would read as a URL, an email address or a reference.
+
+    Inside the text of a link, any of those would nest one reference in
+    another. Escaped, they render as themselves.
+    """
+    return re.sub(r"[:@_]", r"\\\g<0>", text)
 
 
 def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
@@ -366,26 +389,29 @@ class RestRenderer(RSTRenderer):
         self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
     ) -> str:
         """Render a link to a URL, keeping emphasis around it and markup in its text."""
-        text = self.render_children(token, state)
-        if len(text.strip()) == 0:
-            # An empty link has nothing to emphasize and nothing to show. The
-            # escaped space keeps docutils reading a reference, and the
-            # anonymous form keeps two of them from claiming one name.
-            return rf"\ `\ <{url}>`__\ "
-
         holds_only_text = all(
             child["type"] in ("text", "softbreak") for child in token["children"]
         )
-        if emphasis_marker == "" and holds_only_text:
-            underscore = "__" if self.anonymous_references else "_"
-            return rf"\ `{text} <{url}>`{underscore}\ "
+        if holds_only_text:
+            text = self.render_children(token, state)
+            if len(text.strip()) == 0:
+                # An empty link has nothing to emphasize and nothing to show.
+                # The escaped space keeps docutils reading a reference, and the
+                # anonymous form keeps two of them from claiming one name.
+                return rf"\ `\ <{url}>`__\ "
+            if emphasis_marker == "":
+                underscore = "__" if self.anonymous_references else "_"
+                return rf"\ `{text} <{url}>`{underscore}\ "
 
         # RST cannot nest inline markup in a hyperlink reference, so the text
         # goes in a substitution and a named target makes it a link. The
         # replacement opens with an escaped space, which docutils drops, so that
         # text starting with "- " or "1. " cannot turn into a list.
-        if emphasis_marker != "":
-            text = self.render_emphasis(token, state, emphasis_marker)
+        with rendering_link_text(state):
+            if emphasis_marker == "":
+                text = self.render_children(token, state)
+            else:
+                text = self.render_emphasis(token, state, emphasis_marker)
         replacement = trim_inline_escapes(text).replace("\n", " ")
         name = define_substitution(
             state, "m2r-link", f"replace:: \\ {replacement}", target_url=url
@@ -426,22 +452,33 @@ class RestRenderer(RSTRenderer):
         indented = self._indent_block(children.strip())
         return f"\n..\n\n{indented}\n\n"
 
+    def text(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render text, escaping what would become a reference inside a link."""
+        text = super().text(token, state)
+        if is_inside_link_text(state):
+            return escape_reference_characters(text)
+        return text
+
     def image(self, token: dict[str, Any], state: BlockState) -> str:
-        """Render an inline image with a link to its source."""
-        return self.render_image(token, state, target=token["attrs"]["url"])
+        """Render an inline image, linking to its source unless a link holds it."""
+        target = None if is_inside_link_text(state) else token["attrs"]["url"]
+        return self.render_image(token, state, target=target)
 
     def render_image(
         self,
         token: dict[str, Any],
         state: BlockState,
-        target: str,
+        target: str | None,
         *,
         inline: bool = True,
     ) -> str:
         """Render an image as a block directive or an inline substitution."""
         source = token["attrs"]["url"]
         alt = trim_inline_escapes(self.render_children(token, state)).replace("\n", " ")
-        content = f"image:: {source}\n   :target: {target}\n   :alt: {alt}"
+        content = f"image:: {source}"
+        if target is not None:
+            content += f"\n   :target: {target}"
+        content += f"\n   :alt: {alt}"
         if not inline:
             return f"\n\n.. {content}\n\n"
         name = define_substitution(state, "m2r-image", content)
