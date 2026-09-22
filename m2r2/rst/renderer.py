@@ -71,6 +71,29 @@ def define_substitution(
     return name
 
 
+def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
+    """Take the footnote references out of a token's children, keeping their order.
+
+    docutils refuses an auto-numbered footnote reference inside a substitution
+    definition, and inside a link it would nest one reference in another.
+    """
+    removed: list[dict[str, Any]] = []
+    children = token.get("children")
+    if children is None:
+        return removed
+
+    kept = []
+    for child in children:
+        if child["type"] == "footnote_ref":
+            removed.append(child)
+            continue
+        removed.extend(remove_footnote_references(child))
+        kept.append(child)
+    token["children"] = kept
+
+    return removed
+
+
 def merge_adjacent_raw_html_roles(text: str) -> str:
     """Join raw HTML roles that mistune splits across tokens."""
     while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
@@ -296,10 +319,20 @@ class RestRenderer(RSTRenderer):
     def render_link(
         self, token: dict[str, Any], state: BlockState, emphasis_marker: str
     ) -> str:
-        """Render a hyperlink, a Sphinx cross-reference, or a linked image.
+        """Render a link, with the footnote references from its text after it.
 
         ``emphasis_marker`` is the RST emphasis around the link, empty for none.
         """
+        footnote_references = remove_footnote_references(token)
+        rendered = self.render_linked_text(token, state, emphasis_marker)
+        return rendered + "".join(
+            self.render_token(reference, state) for reference in footnote_references
+        )
+
+    def render_linked_text(
+        self, token: dict[str, Any], state: BlockState, emphasis_marker: str
+    ) -> str:
+        """Render a hyperlink, a Sphinx cross-reference, or a linked image."""
         url = token["attrs"]["url"]
         title = token["attrs"].get("title")
         children = token["children"]

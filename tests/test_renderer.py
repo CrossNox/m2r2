@@ -40,6 +40,11 @@ class RendererTestBase(TestCase):
         self.assertEqual(len(references), 1)
         return references[0]
 
+    def find_first_paragraph_children(self, src, **kwargs):
+        """Convert Markdown and return the nodes of its first paragraph."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        return next(document.findall(nodes.paragraph)).children
+
     def check_rst(self, rst):
         pub = Publisher(
             reader=Reader(),
@@ -651,6 +656,38 @@ our |m2r-link-fc8682c5ec06|_ example
         self.assertEqual(
             [reference["refuri"] for reference in document.findall(nodes.reference)],
             ["https://example.com/1", "https://example.com/2"],
+        )
+
+    def assert_link_then_footnote(self, src, link_text):
+        children = self.find_first_paragraph_children(src)
+        reference = next(
+            child for child in children if isinstance(child, nodes.reference)
+        )
+        footnote = next(
+            child for child in children if isinstance(child, nodes.footnote_reference)
+        )
+        self.assertEqual(reference.astext(), link_text)
+        self.assertLess(children.index(reference), children.index(footnote))
+
+    def test_footnote_in_link_text(self):
+        self.assert_link_then_footnote(
+            "see [a[^1]](https://example.com) now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_in_emphasized_link_text(self):
+        self.assert_link_then_footnote(
+            "see **[a[^1]](https://example.com)** now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_nested_in_link_text(self):
+        self.assert_link_then_footnote(
+            "see [**a[^1]**](https://example.com) now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_in_the_middle_of_link_text(self):
+        self.assert_link_then_footnote(
+            "see [the spec[^1] draft](https://example.com) now\n\n[^1]: note",
+            "the spec draft",
         )
 
     def test_text_starting_like_a_block_marker(self):
