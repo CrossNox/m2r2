@@ -85,6 +85,32 @@ def is_inside_link_text(state: BlockState) -> bool:
     return state.env.get("inside_link_text", False)
 
 
+@contextmanager
+def rendering_heading(state: BlockState) -> Iterator[None]:
+    """Mark what is rendered next as the text of a heading."""
+    state.env["inside_heading"] = True
+    yield
+    state.env["inside_heading"] = False
+
+
+def is_inside_heading(state: BlockState) -> bool:
+    """Tell whether the renderer is inside the text of a heading."""
+    return state.env.get("inside_heading", False)
+
+
+def flatten_to_plain_text(token: dict[str, Any]) -> str:
+    """Join the text a token holds, dropping the markup around it.
+
+    A Sphinx role and a section title both read plain text, so a link rendered
+    into either one has to give up the markup inside it.
+    """
+    if token["type"] in ("text", "codespan"):
+        return str(token.get("raw", ""))
+    if token["type"] == "softbreak":
+        return " "
+    return "".join(flatten_to_plain_text(child) for child in token.get("children", []))
+
+
 def escape_reference_characters(text: str) -> str:
     """Escape what docutils would read as a URL, an email address or a reference.
 
@@ -373,8 +399,9 @@ class RestRenderer(RSTRenderer):
         if not self.parse_relative_links or url_info.scheme != "":
             return self.render_hyperlink_reference(token, state, url, emphasis_marker)
 
-        # A Sphinx role holds plain text, so emphasis around the link is lost.
-        text = self.render_children(token, state)
+        # A Sphinx role holds plain text, so the markup in the link text and
+        # the emphasis around the link are both lost.
+        text = flatten_to_plain_text(token)
         if url_info.fragment and not url_info.path:
             # Anchor-only link, e.g. [text](#anchor)
             return rf"\ :ref:`{text} <{url_info.fragment}>`\ "
@@ -389,6 +416,13 @@ class RestRenderer(RSTRenderer):
         self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
     ) -> str:
         """Render a link to a URL, keeping emphasis around it and markup in its text."""
+        if is_inside_heading(state):
+            # docutils names a section after the text of its title as the title
+            # reads when parsed, so a substitution reference there would put its
+            # own name in the section id. The anonymous form writes no target,
+            # which would otherwise claim the id the section wants.
+            return rf"\ `{flatten_to_plain_text(token)} <{url}>`__\ "
+
         holds_only_text = all(
             child["type"] in ("text", "softbreak") for child in token["children"]
         )
@@ -426,7 +460,8 @@ class RestRenderer(RSTRenderer):
         else:
             level = token.get("level", 1)
 
-        text = self.render_children(token, state)
+        with rendering_heading(state):
+            text = self.render_children(token, state)
 
         if level in self.hmarks:
             mark = self.hmarks[level]

@@ -40,6 +40,12 @@ class RendererTestBase(TestCase):
         self.assertEqual(len(references), 1)
         return references[0]
 
+    def find_section_ids(self, src, **kwargs):
+        """Convert Markdown and return the ids docutils gives its sections."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        sections = [section["ids"] for section in document.findall(nodes.section)]
+        return sections or [document["ids"]]
+
     def find_first_paragraph_children(self, src, **kwargs):
         """Convert Markdown and return the nodes of its first paragraph."""
         document = self.convert_markdown_to_document(src, **kwargs)
@@ -1095,6 +1101,53 @@ before |m2r-image-ed8a5249f9ad| after
 
 """,
         )
+
+
+class TestRelativeLinkRoles(RendererTestBase):
+    """Sphinx roles read plain text, so markup in the link text is flattened."""
+
+    def test_document_link_with_code_text(self):
+        out = self.conv_no_check(
+            "see [`run()`](other.md) now", parse_relative_links=True
+        )
+        self.assertIn(":doc:`run() <other>`", out)
+
+    def test_anchor_link_with_code_text(self):
+        out = self.conv_no_check(
+            "see [`run()`](#section) now", parse_relative_links=True
+        )
+        self.assertIn(":ref:`run() <section>`", out)
+
+    def test_document_link_inside_emphasis(self):
+        out = self.conv_no_check(
+            "see **[other page](other.md)** now", parse_relative_links=True
+        )
+        self.assertIn(":doc:`other page <other>`", out)
+
+
+class TestHeadingLinks(RendererTestBase):
+    """A link in a heading keeps the section id readable."""
+
+    def test_emphasized_link_in_heading(self):
+        src = "# Install **[pkg](https://e.com)** guide\n\ntext\n"
+        self.assertEqual(self.find_section_ids(src), [["install-pkg-guide"]])
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference["refuri"], "https://e.com")
+        self.assertEqual(reference.astext(), "pkg")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 0)
+
+    def test_code_link_as_whole_heading(self):
+        src = "# [`run()`](https://e.com)\n\ntext\n"
+        self.assertEqual(self.find_section_ids(src), [["run"]])
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference.astext(), "run()")
+
+    def test_emphasis_without_a_link_survives(self):
+        src = "# **bold** title\n\ntext\n"
+        document = self.convert_markdown_to_document(src)
+        self.assertEqual(len(list(document.findall(nodes.strong))), 1)
 
 
 class TestHeading(RendererTestBase):
