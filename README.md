@@ -33,7 +33,8 @@ Sphinx documents benefit from being written in markdown, since it's widely used 
 * Sphinx extension
     * add markdown support for sphinx
     * ``mdinclude`` directive to include markdown from md or rst files
-    * option to parse relative links into ref and doc directives (``m2r_parse_relative_links``)
+    * option to parse relative document links into ``:doc:`` roles (``m2r_parse_relative_links``)
+    * resolve links to Markdown headings by GitHub anchor and to RST labels
     * option to render ``mermaid`` blocks as graphs with [sphinxcontrib.mermaid](https://sphinxcontrib-mermaid-demo.readthedocs.io/en/latest/index.html) (``m2r_use_mermaid``, default: auto)
       * auto means that m2r2 will check if `sphinxcontrib.mermaid` has been added to the extensions list
 * Pure python implementation
@@ -95,6 +96,10 @@ from m2r2 import parse_from_file
 output = parse_from_file('markdown_file.md')
 ```
 
+Each conversion produces one complete RST document, including any role and
+substitution definitions it needs. Do not combine converted outputs inside
+another document. Use `mdinclude` to place Markdown in an existing document.
+
 ### Upgrading to 1.0
 
 The reusable converter class is named `M2R2`. Existing imports of `M2R` still
@@ -103,11 +108,26 @@ work through an alias. The `convert` and `parse_from_file` functions remain avai
 Generated RST may use different spacing while preserving document content and
 structure. Standalone images keep block image directives. Images within text,
 headings, and table cells use substitutions so they can appear inline.
-RST cannot nest inline markup, so emphasis is applied to surrounding text
-while nested links and code retain their own formatting.
+RST cannot nest inline markup directly. M2R2 uses substitutions for links that
+contain markup or sit inside emphasis, so both formats survive.
 
 In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
 `no_underscore_emphasis`. The old name still works with a deprecation warning.
+
+### Upgrading to 2.0
+
+`M2R2` no longer accepts a custom `renderer`. Use `M2R2` for complete documents.
+Sphinx integrations can construct `SphinxM2R2` from the current docutils
+document. A `RestRenderer` used directly with Mistune renders only the document
+body and does not prepend its role or substitution definitions.
+
+Links can now preserve emphasis around them and inline markup in their text.
+Links rendered as Sphinx roles remain plain text. Link titles are discarded,
+and generated substitution names are shorter.
+
+Under Sphinx, fragment links resolve Markdown headings by their GitHub anchors
+and also resolve explicit RST labels. They no longer become ``:ref:`` roles.
+Absolute `mdinclude` paths now start at the Sphinx source directory.
 
 ### Sphinx Integration
 
@@ -127,11 +147,58 @@ Write index.md and run `make html`.
 
 When `m2r2` extension is enabled on sphinx and `.md` file is loaded, m2r2 converts to rst and pass to sphinx, not making new `.rst` file.
 
+#### Links to headings and labels
+
+Under Sphinx, a link such as `[install](#installation)` resolves the anchor that
+GitHub gives the heading. Repeated headings use numbered anchors such as
+`#installation-1`. A fragment can also name an explicit RST label.
+
+Enable `m2r_parse_relative_links` to resolve links to anchors in other Markdown
+documents:
+
+```python
+m2r_parse_relative_links = True
+```
+
+Then `[install](guide.md#installation)` resolves within `guide.md`. Relative
+links without a fragment become ``:doc:`` roles. A missing document or anchor
+produces an `m2r2.anchor` warning. Suppress these warnings in `conf.py` only
+when unresolved links are intentional:
+
+```python
+suppress_warnings = ["m2r2.anchor"]
+```
+
 #### mdinclude directive
 
-Like `.. include:: file` directive, `.. mdinclude:: file` directive inserts markdown file at the line.
+Use `mdinclude` in a Markdown or RST document to convert and insert another
+Markdown file:
 
-Note: do not use `.. include:: file` directive to include markdown file even if in the markdown file, please use `.. mdinclude:: file` instead.
+```rst
+.. mdinclude:: path/to/part.md
+```
+
+A relative path starts at the file holding the directive. A path beginning
+with `/` starts at the Sphinx source directory.
+
+The directive accepts these options:
+
+* `start-line` and `end-line` select a slice of the file.
+* `lines` selects one-based lines and ranges such as `1, 3-5, 8-`. It comes
+  from Sphinx's `literalinclude`. It cannot be combined with `start-line`,
+  `end-line`, `literal`, or `code`.
+* `start-after` and `end-before` keep the text between two markers. Like
+  docutils' `include`, each marker matches text rather than a whole line, and
+  the marker itself is omitted. Line selection happens before marker matching.
+* `encoding` sets the source file encoding. `tab-width` sets the tab width.
+* `literal` shows the file without converting it. `code` also skips conversion
+  and uses its value as the syntax language.
+* With `literal` or `code`, `number-lines` adds line numbers, `name` gives the
+  shown block a target name, and `class` adds CSS classes.
+
+The `parser` option is not supported because `mdinclude` always parses Markdown.
+Docutils reports it as an unknown option. Use `mdinclude`, not `include`, for a
+Markdown file that should be converted.
 
 #### Using mdinclude with another markdown parser
 

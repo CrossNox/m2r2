@@ -1,3 +1,27 @@
+### Version 2.0.0 (2026-09-22)
+
+#### Breaking changes
+
+* Remove the `renderer` argument from `M2R2`. `SphinxM2R2` constructs a converter from a docutils document for Sphinx integrations.
+* Make `RestRenderer` render only the document body when it is used directly with Mistune. `M2R2` writes the role and substitution definitions for a complete document.
+* Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.
+* Discard Markdown link titles, which RST references cannot represent.
+* Resolve fragment links under Sphinx with the `m2r-anchor` role instead of `:ref:`.
+* Render links in headings with plain text and anonymous references so section ids stay readable.
+* Start absolute `mdinclude` paths at the Sphinx source directory instead of the filesystem root.
+
+#### Fixes and additions
+
+* Write document definitions after footnotes render, so links and images in footnotes have their definitions.
+* Preserve emphasis around links and inline markup within link text by using substitutions where RST cannot express the nesting directly.
+* Render empty links as empty references and move footnote references out of link text.
+* Prevent references from nesting inside links. Linked images lose their own targets, and plain link text escapes characters that create RST references.
+* Render strikethrough content as HTML and keep its inline Markdown formatting.
+* Preserve backslashes in text and derive image alt text from plain text.
+* Resolve same-page and cross-page links to Markdown headings by their GitHub anchors. Resolve explicit RST labels before generated heading anchors with the same name.
+* Add `start-after`, `end-before`, `lines`, `literal`, `code`, `number-lines`, `name`, and `class` to `mdinclude`. Reject its `parser` option.
+* Track files read by `mdinclude` so Sphinx rebuilds them when they change.
+
 ### Version 1.1.0 (2026-09-18)
 * Add the `m2r2.mdinclude` Sphinx extension. It provides the `mdinclude` directive and leaves `.md` files to another parser.
 

@@ -101,8 +101,8 @@ def convert(
         text: Markdown source text.
         no_underscore_emphasis: Disable underscore-based emphasis.
         disable_inline_math: Disable inline math parsing.
-        parse_relative_links: Convert relative links to RST references.
-        anonymous_references: Use anonymous RST references.
+        parse_relative_links: Convert relative document links to ``:doc:`` roles.
+        anonymous_references: Use anonymous RST references for plain link text.
         use_mermaid: Render mermaid code blocks as directives.
 
     Returns:

@@ -30,8 +30,8 @@ def parse_from_file(
         encoding: File encoding. Defaults to "utf-8".
         no_underscore_emphasis: Disable underscore-based emphasis.
         disable_inline_math: Disable inline math parsing.
-        parse_relative_links: Convert relative links to RST references.
-        anonymous_references: Use anonymous RST references.
+        parse_relative_links: Convert relative document links to ``:doc:`` roles.
+        anonymous_references: Use anonymous RST references for plain link text.
         use_mermaid: Render mermaid code blocks as directives.
 
     Returns:
@@ -125,12 +125,12 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--parse-relative-links",
         action="store_true",
-        help="convert relative links to :doc: or :ref: directives",
+        help="convert relative document links to :doc: roles",
     )
     parser.add_argument(
         "--anonymous-references",
         action="store_true",
-        help="use anonymous references (__ instead of _)",
+        help="use anonymous references for links with plain text",
     )
     parser.add_argument(
         "--disable-inline-math",
