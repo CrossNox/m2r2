@@ -489,6 +489,30 @@ See `https://example.com`_.
         )
 
 
+class TestTextEscaping(RendererTestBase):
+    """Text reaches the reader with the characters the Markdown holds."""
+
+    def test_backslash_in_strong(self):
+        document = self.convert_markdown_to_document("**C:\\\\**")
+        self.assertEqual(next(document.findall(nodes.strong)).astext(), "C:\\")
+
+    def test_backslash_before_a_space(self):
+        document = self.convert_markdown_to_document("see C:\\\\ now")
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(paragraph.astext(), "see C:\\ now")
+
+    def test_backslash_in_link_text(self):
+        reference = self.find_only_reference("**[C:\\\\](https://e.com)**")
+        self.assertEqual(reference.astext(), "C:\\")
+
+    def test_image_alt_keeps_backslash_pipe_and_code(self):
+        document = self.convert_markdown_to_document(
+            "see ![a \\\\ b | `c`](x.png) here"
+        )
+        image = next(document.findall(nodes.image))
+        self.assertEqual(image["alt"], "a \\ b | c")
+
+
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
 

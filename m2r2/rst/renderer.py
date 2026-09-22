@@ -510,8 +510,13 @@ class RestRenderer(RSTRenderer):
         return f"\n..\n\n{indented}\n\n"
 
     def text(self, token: dict[str, Any], state: BlockState) -> str:
-        """Render text, escaping what would become a reference inside a link."""
-        text = super().text(token, state)
+        """Render text so RST reads the characters the Markdown holds.
+
+        A backslash in Markdown text is a literal character, while in RST it
+        escapes whatever follows it. Inside a link, the characters that would
+        start another reference are escaped as well.
+        """
+        text = token["raw"].replace("\\", "\\\\").replace("|", "\\|")
         if is_inside_link_text(state):
             return escape_reference_characters(text)
         return text
@@ -531,7 +536,8 @@ class RestRenderer(RSTRenderer):
     ) -> str:
         """Render an image as a block directive or an inline substitution."""
         source = token["attrs"]["url"]
-        alt = trim_inline_escapes(self.render_children(token, state)).replace("\n", " ")
+        # docutils takes a directive option as written, without unescaping it.
+        alt = flatten_to_plain_text(token).replace("\n", " ")
         content = f"image:: {source}"
         if target is not None:
             content += f"\n   :target: {target}"
