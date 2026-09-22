@@ -262,6 +262,21 @@ See `https://example.com`_.
         out = self.conv(src)
         self.assertIn(":raw-html-m2r:`<del>a</del>`", out)
 
+    def test_strikethrough_renders_its_markup_as_html(self):
+        out = self.conv("~~a `b` **c** [d](https://e.com)~~")
+        self.assertIn(
+            '<del>a <code>b</code> <strong>c</strong> <a href="https://e.com">d</a></del>',
+            out,
+        )
+
+    def test_strikethrough_shows_m2r2_tokens_as_text(self):
+        out = self.conv("~~`$x$` at https://e.com~~")
+        self.assertIn(":raw-html-m2r:`<del>x at https://e.com</del>`", out)
+
+    def test_strikethrough_puts_footnote_references_after_it(self):
+        out = self.conv("~~a[^1]~~ b\n\n[^1]: note")
+        self.assertIn(":raw-html-m2r:`<del>a</del>`\\ [#fn-1]_ b", out)
+
     def test_emphasis(self):
         src = "*a*"
         out = self.conv(src)
@@ -335,19 +350,18 @@ See `https://example.com`_.
         out = self.conv_no_check(src, parse_relative_links=True)
         self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
 
-    def test_link_title(self):
+    def test_link_title_is_dropped(self):
+        """A title would need raw HTML, which no other builder reads."""
         src = 'this is a [link](http://example.com/ "example").'
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            """\
-.. role:: raw-html-m2r(raw)
-   :format: html
+        self.assertEqual(out, "\nthis is a `link <http://example.com/>`_.\n")
 
-
-this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`.
-""",
+    def test_link_title_with_markup_keeps_the_markup(self):
+        reference = self.find_only_reference(
+            'this is a [**link**](http://example.com/ "example").'
         )
+        self.assertEqual(reference["refuri"], "http://example.com/")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_image_link(self):
         src = "[![Alt Text](image_target_url)](link_target_url)"

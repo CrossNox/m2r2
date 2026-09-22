@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from docutils.utils import column_width
 from mistune.core import BlockState
+from mistune.renderers.html import HTMLRenderer
 from mistune.renderers.rst import RSTRenderer
 
 if TYPE_CHECKING:
@@ -175,6 +176,34 @@ def remove_redundant_inline_escapes(text: str) -> str:
     )
 
 
+class StrikethroughHtmlRenderer(HTMLRenderer):
+    """Render the content of a strikethrough as HTML.
+
+    RST has no strikethrough, so it reaches the page as raw HTML, and the markup
+    inside it has to be HTML too. RST that m2r2 passes through from the
+    Markdown has no HTML form and shows as its source text.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(escape=False)
+
+    def render_token(self, token: dict[str, Any], state: BlockState) -> str:
+        """Render a token, including the ones m2r2's own plugins produce."""
+        if token["type"] in ("rest_role", "rest_link", "rst_footnote_ref"):
+            return html.escape(token["text"])
+        if token["type"] == "inline_math":
+            return html.escape(token["math"])
+        if token["type"] == "eol_literal_marker":
+            return html.escape(token["marker"])
+        if token["type"] == "standalone_hyperlink":
+            return html.escape(token["raw"])
+        return super().render_token(token, state)
+
+    def strikethrough(self, text: str) -> str:
+        """Render a strikethrough nested in another one."""
+        return f"<del>{text}</del>"
+
+
 class RestRenderer(RSTRenderer):
     """Render Markdown as RST with embedded directives and inline roles."""
 
@@ -202,6 +231,7 @@ class RestRenderer(RSTRenderer):
         self.use_mermaid = use_mermaid
         self.is_sphinx = is_sphinx
         self.existing_substitutions = existing_substitutions
+        self.strikethrough_html_renderer = StrikethroughHtmlRenderer()
         super().__init__()
 
     def iter_tokens(
@@ -383,17 +413,9 @@ class RestRenderer(RSTRenderer):
     ) -> str:
         """Render a hyperlink, a Sphinx cross-reference, or a linked image."""
         url = token["attrs"]["url"]
-        title = token["attrs"].get("title")
         children = token["children"]
         if len(children) == 1 and children[0]["type"] == "image":
             return self.render_image(children[0], state, target=url)
-
-        if title:
-            text = self.render_children(token, state)
-            return self._raw_html(
-                f'<a href="{html.escape(url)}" title="{html.escape(title)}">{text}</a>',
-                state,
-            )
 
         url_info = urlparse(url)
         if not self.parse_relative_links or url_info.scheme != "":
@@ -554,9 +576,16 @@ class RestRenderer(RSTRenderer):
             )
 
     def strikethrough(self, token, state):
-        """Render strikethrough as raw HTML ``<del>`` via raw-html-m2r role."""
-        text = self.render_children(token, state)
-        return self._raw_html(f"<del>{text}</del>", state)
+        """Render strikethrough as raw HTML, with the footnote references after it.
+
+        A footnote reference has no HTML form, so it follows the struck text the
+        way it follows a link.
+        """
+        footnote_references = remove_footnote_references(token)
+        text = self.strikethrough_html_renderer.render_tokens(token["children"], state)
+        return self._raw_html(f"<del>{text}</del>", state) + "".join(
+            self.render_token(reference, state) for reference in footnote_references
+        )
 
     def emphasis(self, token: dict[str, Any], state: BlockState) -> str:
         return self.render_emphasis(token, state, "*")
