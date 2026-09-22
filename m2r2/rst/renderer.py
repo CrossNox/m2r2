@@ -333,11 +333,17 @@ class RestRenderer(RSTRenderer):
         self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
     ) -> str:
         """Render a link to a URL, keeping emphasis around it and markup in its text."""
+        text = self.render_children(token, state)
+        if len(text.strip()) == 0:
+            # An empty link has nothing to emphasize and nothing to show. The
+            # escaped space keeps docutils reading a reference, and the
+            # anonymous form keeps two of them from claiming one name.
+            return rf"\ `\ <{url}>`__\ "
+
         holds_only_text = all(
             child["type"] in ("text", "softbreak") for child in token["children"]
         )
         if emphasis_marker == "" and holds_only_text:
-            text = self.render_children(token, state)
             underscore = "__" if self.anonymous_references else "_"
             return rf"\ `{text} <{url}>`{underscore}\ "
 
@@ -345,9 +351,7 @@ class RestRenderer(RSTRenderer):
         # goes in a substitution and a named target makes it a link. The
         # replacement opens with an escaped space, which docutils drops, so that
         # text starting with "- " or "1. " cannot turn into a list.
-        if emphasis_marker == "":
-            text = self.render_children(token, state)
-        else:
+        if emphasis_marker != "":
             text = self.render_emphasis(token, state, emphasis_marker)
         replacement = trim_inline_escapes(text).replace("\n", " ")
         name = define_substitution(

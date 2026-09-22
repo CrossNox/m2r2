@@ -629,6 +629,30 @@ our |m2r-link-fc8682c5ec06|_ example
             ["https://example.com/1", "https://example.com/2"],
         )
 
+    def test_empty_link_text(self):
+        """An empty link renders as an empty, invisible reference."""
+        reference = self.find_only_reference("see [](https://example.com) here")
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "")
+
+    def test_whitespace_link_text(self):
+        reference = self.find_only_reference("see [ ](https://example.com) here")
+        self.assertEqual(reference.astext(), "")
+
+    def test_emphasized_empty_link_text(self):
+        reference = self.find_only_reference("see **[](https://example.com)** here")
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "")
+
+    def test_two_empty_links(self):
+        document = self.convert_markdown_to_document(
+            "[](https://example.com/1) and [](https://example.com/2)"
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in document.findall(nodes.reference)],
+            ["https://example.com/1", "https://example.com/2"],
+        )
+
     def test_text_starting_like_a_block_marker(self):
         """The escaped space opening a replacement keeps docutils reading text."""
         for link_text, expected in (
