@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
 
+#: The role m2r2's Sphinx extension resolves as a link to a Markdown heading.
+HEADING_ANCHOR_ROLE_NAME = "m2r-anchor"
+
 #: Hex characters of the hash a substitution is named after. Twelve leaves the
 #: chance of two substitutions colliding in one document near one in a billion.
 SUBSTITUTION_NAME_HASH_LENGTH = 12
@@ -418,19 +421,26 @@ class RestRenderer(RSTRenderer):
             return self.render_image(children[0], state, target=url)
 
         url_info = urlparse(url)
-        if not self.parse_relative_links or url_info.scheme != "":
+        points_inside_project = url_info.scheme == "" and url_info.netloc == ""
+
+        # A Sphinx role holds plain text, so in either role below the markup in
+        # the link text and the emphasis around the link are both lost.
+        links_to_a_heading = url_info.fragment != "" and (
+            url_info.path == "" or self.parse_relative_links
+        )
+        if self.is_sphinx and points_inside_project and links_to_a_heading:
+            # Sphinx resolves the fragment as the anchor GitHub gives a heading.
+            text = flatten_to_plain_text(token)
+            return rf"\ :{HEADING_ANCHOR_ROLE_NAME}:`{text} <{url}>`\ "
+
+        if not points_inside_project or not self.parse_relative_links:
+            return self.render_hyperlink_reference(token, state, url, emphasis_marker)
+        if url_info.path == "":
             return self.render_hyperlink_reference(token, state, url, emphasis_marker)
 
-        # A Sphinx role holds plain text, so the markup in the link text and
-        # the emphasis around the link are both lost.
+        # Document link, e.g. [text](page.md). A :doc: role carries no fragment,
+        # so outside Sphinx a link to page.md#anchor loses its anchor.
         text = flatten_to_plain_text(token)
-        if url_info.fragment and not url_info.path:
-            # Anchor-only link, e.g. [text](#anchor)
-            return rf"\ :ref:`{text} <{url_info.fragment}>`\ "
-
-        # Document link, e.g. [text](page.md) or [text](page.md#anchor).
-        # The :doc: directive does not support anchors, so the fragment
-        # is intentionally discarded — matching the original m2r behavior.
         doc_link = os.path.splitext(url_info.path)[0]
         return rf"\ :doc:`{text} <{doc_link}>`\ "
 

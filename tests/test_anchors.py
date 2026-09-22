@@ -128,9 +128,169 @@ class TestHeadingAnchorMap(AnchorProjectTestBase):
 
     def test_rebuild_forgets_a_removed_heading(self):
         srcdir = self.create_project({"index.md": "# Title\n\n## Gone\n\ntext\n"})
-        self.build_project(srcdir)
+        first_app, _ = self.build_project(srcdir)
+        first_app.cleanup()
 
         (srcdir / "index.md").write_text("# Title\n\ntext\n")
         app, _ = self.build_project(srcdir, freshenv=False)
 
         self.assertEqual(set(find_heading_anchors(app.env)["index"]), {"title"})
+
+
+class TestHeadingAnchorLinks(AnchorProjectTestBase):
+    """Links to a heading's GitHub anchor land on the right section."""
+
+    def find_section_ids(self, app, docname):
+        """Return the ids Sphinx gave the sections of a document, in order."""
+        return [
+            section["ids"][0]
+            for section in app.env.get_doctree(docname).findall(nodes.section)
+        ]
+
+    def read_built_page(self, app, docname):
+        return (Path(app.outdir) / f"{docname}.html").read_text()
+
+    def test_link_to_a_repeated_heading(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Title\n\n## Bugfixes\n\na\n\n## Bugfixes\n\nb\n\n"
+                    "See [the second](#bugfixes-1).\n"
+                ),
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        second_bugfixes_id = self.find_section_ids(app, "index")[2]
+        self.assertIn(
+            f'href="#{second_bugfixes_id}"', self.read_built_page(app, "index")
+        )
+
+    def test_link_to_a_heading_with_punctuation(self):
+        srcdir = self.create_project(
+            {"index.md": "# Title\n\n## Version 1.0\n\nSee [it](#version-10).\n"}
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        version_id = self.find_section_ids(app, "index")[1]
+        self.assertIn(f'href="#{version_id}"', self.read_built_page(app, "index"))
+
+    def test_link_to_a_heading_on_another_page(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Index\n\nSee [fixes](other.md#bugfixes-1).\n\n"
+                    ".. toctree::\n\n   other\n"
+                ),
+                "other.md": "# Other\n\n## Bugfixes\n\na\n\n## Bugfixes\n\nb\n",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        second_bugfixes_id = self.find_section_ids(app, "other")[2]
+        self.assertIn(
+            f'href="other.html#{second_bugfixes_id}"',
+            self.read_built_page(app, "index"),
+        )
+
+    def test_link_to_another_page_without_relative_links_stays_an_href(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Index\n\nSee [fixes](other.md#bugfixes-1).\n\n"
+                    ".. toctree::\n\n   other\n"
+                ),
+                "other.md": "# Other\n\n## Bugfixes\n\na\n\n## Bugfixes\n\nb\n",
+            }
+        )
+        app, _ = self.build_project(srcdir)
+
+        self.assertIn('href="other.md#bugfixes-1"', self.read_built_page(app, "index"))
+
+    def test_link_to_a_missing_anchor_warns(self):
+        srcdir = self.create_project({"index.md": "# Title\n\nSee [it](#nowhere).\n"})
+        app, warning = self.build_project(srcdir)
+
+        self.assertIn(
+            "m2r2 found no heading with the anchor #nowhere in 'index'", warning
+        )
+        self.assertIn("<p>See <span>it</span>.</p>", self.read_built_page(app, "index"))
+
+    def test_link_to_a_missing_document_warns(self):
+        srcdir = self.create_project(
+            {"index.md": "# Title\n\nSee [it](missing.md#part).\n"},
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        _, warning = self.build_project(srcdir)
+
+        self.assertIn(
+            "m2r2 found no document 'missing' for the link to 'missing.md#part'",
+            warning,
+        )
+
+    def test_link_in_included_markdown(self):
+        srcdir = self.create_project(
+            {
+                "index.rst": (
+                    "Index\n=====\n\nBugfixes\n--------\n\ntext\n\n"
+                    ".. mdinclude:: part.txt\n"
+                ),
+                "part.txt": "See [fixes](#bugfixes).\n",
+            },
+            extra_conf_py='extensions = ["m2r2.mdinclude"]',
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertNotIn("m2r2", warning)
+        bugfixes_id = self.find_section_ids(app, "index")[1]
+        self.assertIn(f'href="#{bugfixes_id}"', self.read_built_page(app, "index"))
+
+    def test_rebuild_still_resolves_links_to_an_unchanged_page(self):
+        files = {
+            "index.md": (
+                "# Index\n\nSee [part](other.md#part).\n\n.. toctree::\n\n   other\n"
+            ),
+            "other.md": "# Other\n\n## Part\n\ntext\n",
+        }
+        srcdir = self.create_project(
+            files, extra_conf_py="m2r_parse_relative_links = True"
+        )
+        first_app, _ = self.build_project(srcdir)
+        first_app.cleanup()
+
+        (srcdir / "index.md").write_text(files["index.md"] + "\nMore text.\n")
+        app, warning = self.build_project(srcdir, freshenv=False)
+
+        self.assertNotIn("m2r2", warning)
+        part_id = self.find_section_ids(app, "other")[1]
+        self.assertIn(
+            f'href="other.html#{part_id}"', self.read_built_page(app, "index")
+        )
+
+    def test_parallel_build_resolves_links(self):
+        pages = {
+            f"page{number}.md": (
+                f"# Page {number}\n\n## Part\n\nSee [the next](page{(number + 1) % 6}.md#part).\n"
+            )
+            for number in range(6)
+        }
+        toctree = "\n".join(f"   page{number}" for number in range(6))
+        srcdir = self.create_project(
+            {"index.rst": f"Index\n=====\n\n.. toctree::\n\n{toctree}\n", **pages},
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir, parallel=2)
+
+        self.assertNotIn("m2r2", warning)
+        for number in range(6):
+            next_number = (number + 1) % 6
+            part_id = self.find_section_ids(app, f"page{next_number}")[1]
+            with self.subTest(page=number):
+                self.assertIn(
+                    f'href="page{next_number}.html#{part_id}"',
+                    self.read_built_page(app, f"page{number}"),
+                )

@@ -335,9 +335,10 @@ See `https://example.com`_.
         self.assertEqual(out, "\nthis is a `link <http://example.com/>`__.\n")
 
     def test_anchor(self):
+        """Outside Sphinx nothing resolves a heading anchor, so it stays an href."""
         src = "this is an [anchor](#anchor)."
         out = self.conv_no_check(src, parse_relative_links=True)
-        self.assertEqual(out, "\nthis is an :ref:`anchor <anchor>`.\n")
+        self.assertEqual(out, "\nthis is an `anchor <#anchor>`_.\n")
 
     def test_relative_link(self):
         src = "this is a [relative link](a_file.md)."
@@ -1151,10 +1152,11 @@ class TestRelativeLinkRoles(RendererTestBase):
         self.assertIn(":doc:`run() <other>`", out)
 
     def test_anchor_link_with_code_text(self):
-        out = self.conv_no_check(
+        reference = self.find_only_reference(
             "see [`run()`](#section) now", parse_relative_links=True
         )
-        self.assertIn(":ref:`run() <section>`", out)
+        self.assertEqual(reference["refuri"], "#section")
+        self.assertEqual(reference.astext(), "run()")
 
     def test_document_link_inside_emphasis(self):
         out = self.conv_no_check(

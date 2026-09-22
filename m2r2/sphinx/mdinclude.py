@@ -1,7 +1,6 @@
 import warnings
 
 from m2r2.m2r2 import __version__
-from m2r2.sphinx.anchors import register_heading_anchors
 from m2r2.sphinx.directives import MdInclude
 
 
@@ -17,7 +16,10 @@ def warn_deprecated_config(app):
 
 
 def setup(app):
-    """Register m2r2 config values and the mdinclude directive."""
+    """Register m2r2 config values, the mdinclude directive and heading links."""
+    # m2r2 works without Sphinx installed, and m2r2/__init__.py imports this module
+    from m2r2.sphinx.anchors import register_heading_anchors
+
     # Deprecated name kept for backward compatibility
     app.add_config_value("no_underscore_emphasis", False, "env")
     app.add_config_value(

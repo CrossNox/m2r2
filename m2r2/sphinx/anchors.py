@@ -3,20 +3,29 @@
 Markdown authors link to a heading with the anchor GitHub gives it, such as
 ``#bugfixes-1`` for the second "Bugfixes". docutils and Sphinx name sections
 differently, so this module records, for every document Sphinx reads, which
-section each GitHub anchor stands for.
+section each GitHub anchor stands for, and points those links at that section.
 """
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from docutils import nodes
+from docutils import nodes, utils
+from sphinx import addnodes
+from sphinx.util import docname_join, logging
+from sphinx.util.nodes import make_refnode, split_explicit_title
+
+from m2r2.rst.renderer import HEADING_ANCHOR_ROLE_NAME
 
 if TYPE_CHECKING:
+    from docutils.parsers.rst.states import Inliner
     from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
+
+logger = logging.getLogger(__name__)
 
 #: Unicode categories GitHub keeps in an anchor: letters, marks, numbers, and
 #: connector punctuation such as the underscore.
@@ -90,8 +99,82 @@ def merge_heading_anchors(
         anchors[docname] = other_anchors[docname]
 
 
+def create_heading_anchor_reference(
+    name: str,
+    rawtext: str,
+    text: str,
+    lineno: int,
+    inliner: Inliner,
+    options: dict[str, Any] | None = None,
+    content: list[str] | None = None,
+) -> tuple[list[nodes.Node], list[nodes.system_message]]:
+    """Create the reference that a link to a heading's GitHub anchor resolves from."""
+    has_title, title, target = split_explicit_title(utils.unescape(text))
+    reference = addnodes.pending_xref(
+        rawtext,
+        refdomain="",
+        reftype=HEADING_ANCHOR_ROLE_NAME,
+        reftarget=target,
+        refexplicit=has_title,
+        refdoc=inliner.document.settings.env.docname,
+    )
+    reference += nodes.inline(title, title)
+    return [reference], []
+
+
+def resolve_heading_anchor_reference(
+    app: Sphinx,
+    env: BuildEnvironment,
+    node: addnodes.pending_xref,
+    contnode: nodes.Element,
+) -> nodes.Element | None:
+    """Point a link at the section whose GitHub anchor it names.
+
+    A link naming a document or an anchor the project lacks gets a warning and
+    renders as its text alone.
+    """
+    if node["reftype"] != HEADING_ANCHOR_ROLE_NAME:
+        return None
+
+    path, _, slug = node["reftarget"].partition("#")
+    source_docname = node["refdoc"]
+    if path == "":
+        target_docname = source_docname
+    else:
+        target_docname = docname_join(source_docname, os.path.splitext(path)[0])
+
+    if target_docname not in env.found_docs:
+        logger.warning(
+            "m2r2 found no document %r for the link to %r",
+            target_docname,
+            node["reftarget"],
+            location=node,
+            type="m2r2",
+            subtype="anchor",
+        )
+        return contnode
+
+    section_id = find_heading_anchors(env)[target_docname].get(slug)
+    if section_id is None:
+        logger.warning(
+            "m2r2 found no heading with the anchor #%s in %r",
+            slug,
+            target_docname,
+            location=node,
+            type="m2r2",
+            subtype="anchor",
+        )
+        return contnode
+
+    return make_refnode(
+        app.builder, source_docname, target_docname, section_id, contnode
+    )
+
+
 def register_heading_anchors(app: Sphinx) -> None:
-    """Connect the handlers that keep the map of heading anchors current."""
+    """Register the role for heading links and the handlers that resolve them."""
+    app.add_role(HEADING_ANCHOR_ROLE_NAME, create_heading_anchor_reference)
     app.connect("doctree-read", record_heading_anchors)
     app.connect("env-purge-doc", forget_heading_anchors)
     app.connect("env-merge-info", merge_heading_anchors)
+    app.connect("missing-reference", resolve_heading_anchor_reference)
