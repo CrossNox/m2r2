@@ -1,22 +1,30 @@
 import os
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 from docutils import io, statemachine, utils
 from docutils.parsers import rst
 from docutils.parsers.rst import directives
+from docutils.parsers.rst.directives.misc import Include
 
 from m2r2.sphinx.converter import SphinxM2R2
+
+# docutils' include always declares its options, though the stubs allow None.
+_DOCUTILS_INCLUDE_OPTIONS = cast("dict[str, Any]", Include.option_spec)
 
 
 class MdInclude(rst.Directive):
     """Include a Markdown file in a Sphinx document.
 
-    Read the file and convert its selected content to reStructuredText,
-    then insert the result into the parser's input.
+    The directive is docutils' include, except that the file is Markdown and
+    converts to reStructuredText before docutils parses it. With ``literal`` or
+    ``code``, the file is shown instead of parsed, so nothing converts.
     """
 
     required_arguments = 1
     optional_arguments = 0
+    # Every option of docutils' include but "parser", since the parser is what
+    # this directive chooses. The options that show the file take docutils'
+    # own converters, so they read the same as in the version installed.
     option_spec: ClassVar[dict] = {
         "start-line": int,
         "end-line": int,
@@ -24,6 +32,11 @@ class MdInclude(rst.Directive):
         "end-before": directives.unchanged_required,
         "encoding": directives.encoding,
         "tab-width": int,
+        "literal": _DOCUTILS_INCLUDE_OPTIONS["literal"],
+        "code": _DOCUTILS_INCLUDE_OPTIONS["code"],
+        "number-lines": _DOCUTILS_INCLUDE_OPTIONS["number-lines"],
+        "name": _DOCUTILS_INCLUDE_OPTIONS["name"],
+        "class": _DOCUTILS_INCLUDE_OPTIONS["class"],
     }
 
     def find_included_file(self):
@@ -71,6 +84,21 @@ class MdInclude(rst.Directive):
 
         return text
 
+    def show_file_without_converting(self, included_file):
+        """Show the Markdown file as a literal or code block, through docutils' include."""
+        include = Include(
+            self.name,
+            [included_file],
+            self.options,
+            self.content,
+            self.lineno,
+            self.content_offset,
+            self.block_text,
+            self.state,
+            self.state_machine,
+        )
+        return include.run()
+
     def run(self):
         settings = self.state.document.settings
         if not settings.file_insertion_enabled:
@@ -80,6 +108,10 @@ class MdInclude(rst.Directive):
         # Sphinx counts a noted file as included, so a Markdown source it
         # would also build on its own is not reported as missing from a toctree.
         settings.env.note_included(included_file)
+
+        if "literal" in self.options or "code" in self.options:
+            return self.show_file_without_converting(included_file)
+
         path = utils.relative_path(None, included_file)
         encoding = self.options.get("encoding", settings.input_encoding)
         encoding_error_handler = settings.input_encoding_error_handler

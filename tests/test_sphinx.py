@@ -537,6 +537,59 @@ second
         )
         self.assertEqual(warning, "")
 
+    def build_include_shown_as_source(self, options):
+        """Include a Markdown file with options that show it instead of converting."""
+        return self.build_html_project_with_m2r2(
+            source_files_by_name={
+                "index.rst": "Test\n====\n\n.. mdinclude:: part.txt\n"
+                + "".join(f"   :{name}: {value}\n" for name, value in options.items()),
+                "part.txt": "Some **bold** text.\n",
+            }
+        )
+
+    def find_only_literal_block(self, app):
+        blocks = list(app.env.get_doctree("index").findall(nodes.literal_block))
+        self.assertEqual(len(blocks), 1)
+        return blocks[0]
+
+    def test_literal_shows_the_markdown_source(self):
+        app, _, warning = self.build_include_shown_as_source({"literal": ""})
+        self.assertEqual(warning, "")
+        self.assertIn("Some **bold** text.", self.find_only_literal_block(app).astext())
+        strong = list(app.env.get_doctree("index").findall(nodes.strong))
+        self.assertEqual(len(strong), 0)
+
+    def test_code_shows_the_markdown_source(self):
+        app, _, warning = self.build_include_shown_as_source({"code": "markdown"})
+        self.assertEqual(warning, "")
+        block = self.find_only_literal_block(app)
+        self.assertIn("Some **bold** text.", block.astext())
+        self.assertIn("markdown", block["classes"])
+
+    def test_number_lines(self):
+        _, outdir, warning = self.build_include_shown_as_source(
+            {"code": "markdown", "number-lines": ""}
+        )
+        self.assertEqual(warning, "")
+        self.assertIn(
+            '<small class="ln">1 </small>', (outdir / "index.html").read_text()
+        )
+
+    def test_name_and_class(self):
+        app, _, warning = self.build_include_shown_as_source(
+            {"literal": "", "name": "source-block", "class": "shown"}
+        )
+        self.assertEqual(warning, "")
+        block = self.find_only_literal_block(app)
+        self.assertIn("source-block", block["ids"])
+        self.assertIn("shown", block["classes"])
+
+    def test_parser_is_rejected(self):
+        _, _, warning = self.build_include_shown_as_source({"parser": "rst"})
+        self.assertIn(
+            'Error in "mdinclude" directive:\nunknown option: "parser".', warning
+        )
+
     def build_include_between_markers(self, options):
         """Include a Markdown file with three sections and the given options."""
         return self.build_html_project_with_m2r2(
