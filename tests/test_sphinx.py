@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import TestCase
 
 from docutils import nodes
-from sphinx.errors import ExtensionError
+from sphinx.errors import ConfigError, ExtensionError
 from sphinx.testing.util import SphinxTestApp
 
 from m2r2 import __version__
@@ -51,6 +51,102 @@ class SphinxTestBase(TestCase):
         return app, Path(app.outdir), warning.getvalue()
 
 
+class TestInlineMathConfig(SphinxTestBase):
+    def build_math_project(self, configuration):
+        return self.build_html_project_with_m2r2(
+            {
+                "index.md": "# Math\n\n`$old$` $new$ $`quoted`$\n\n.. mdinclude:: part.txt\n",
+                "part.txt": "$included$\n",
+            },
+            extra_conf_py=configuration,
+        )
+
+    def test_dollar_math_in_pages_and_includes(self):
+        app, _, warning = self.build_math_project('m2r_inline_math = "dollar"')
+        self.assertEqual(warning, "")
+        self.assertEqual(
+            [
+                node.astext()
+                for node in app.env.get_doctree("index").findall(nodes.math)
+            ],
+            ["new", "quoted", "included"],
+        )
+
+    def test_disable_inline_math(self):
+        app, _, warning = self.build_math_project("m2r_inline_math = None")
+        self.assertEqual(warning, "")
+        self.assertEqual(list(app.env.get_doctree("index").findall(nodes.math)), [])
+
+    def test_deprecated_disable_alias(self):
+        app, _, warning = self.build_math_project("m2r_disable_inline_math = True")
+        self.assertIsNone(app.config.m2r_inline_math)
+        self.assertIn("m2r_disable_inline_math", warning)
+        self.assertIn("deprecated", warning)
+        self.assertEqual(list(app.env.get_doctree("index").findall(nodes.math)), [])
+
+    def test_deprecated_false_alias_preserves_legacy_math(self):
+        app, _, warning = self.build_math_project("m2r_disable_inline_math = False")
+        self.assertEqual(app.config.m2r_inline_math, "legacy")
+        self.assertIn("deprecated", warning)
+        self.assertEqual(
+            [
+                node.astext()
+                for node in app.env.get_doctree("index").findall(nodes.math)
+            ],
+            ["old"],
+        )
+
+    def test_new_option_takes_precedence_over_deprecated_alias(self):
+        app, _, warning = self.build_math_project(
+            'm2r_disable_inline_math = True\nm2r_inline_math = "dollar"'
+        )
+        self.assertEqual(app.config.m2r_inline_math, "dollar")
+        self.assertIn("deprecated", warning)
+        self.assertEqual(
+            [
+                node.astext()
+                for node in app.env.get_doctree("index").findall(nodes.math)
+            ],
+            ["new", "quoted", "included"],
+        )
+
+    def test_invalid_mode_raises_configuration_error(self):
+        with self.assertRaisesRegex(ConfigError, "m2r_inline_math"):
+            self.build_math_project('m2r_inline_math = "unknown"')
+
+    def test_string_false_alias_from_older_sphinx_keeps_math(self):
+        app, _, warning = self.build_math_project('m2r_disable_inline_math = "0"')
+        self.assertEqual(app.config.m2r_inline_math, "legacy")
+        self.assertIn("deprecated", warning)
+        self.assertNotIn("has type", warning)
+        self.assertEqual(
+            [
+                node.astext()
+                for node in app.env.get_doctree("index").findall(nodes.math)
+            ],
+            ["old"],
+        )
+
+    def test_string_true_alias_from_older_sphinx_disables_math(self):
+        app, _, warning = self.build_math_project('m2r_disable_inline_math = "1"')
+        self.assertIsNone(app.config.m2r_inline_math)
+        self.assertIn("deprecated", warning)
+        self.assertNotIn("has type", warning)
+        self.assertEqual(list(app.env.get_doctree("index").findall(nodes.math)), [])
+
+    def test_none_takes_precedence_over_deprecated_false_alias(self):
+        app, _, warning = self.build_math_project(
+            "m2r_disable_inline_math = False\nm2r_inline_math = None"
+        )
+        self.assertIsNone(app.config.m2r_inline_math)
+        self.assertIn("deprecated", warning)
+        self.assertEqual(list(app.env.get_doctree("index").findall(nodes.math)), [])
+
+    def test_invalid_alias_raises_configuration_error(self):
+        with self.assertRaisesRegex(ConfigError, "m2r_disable_inline_math"):
+            self.build_math_project('m2r_disable_inline_math = "unknown"')
+
+
 class TestSetup(SphinxTestBase):
     """Test the Sphinx extension setup() function."""
 
@@ -61,7 +157,7 @@ class TestSetup(SphinxTestBase):
         self.assertFalse(app.config.m2r_no_underscore_emphasis)
         self.assertFalse(app.config.m2r_parse_relative_links)
         self.assertFalse(app.config.m2r_anonymous_references)
-        self.assertFalse(app.config.m2r_disable_inline_math)
+        self.assertEqual(app.config.m2r_inline_math, "legacy")
         self.assertFalse(app.config.m2r_use_mermaid)
 
     def test_md_source_suffix_registered(self):

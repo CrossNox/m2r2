@@ -57,7 +57,7 @@ class TestConvert(TestCase):
             "--no-underscore-emphasis",
             "--parse-relative-links",
             "--anonymous-references",
-            "--disable-inline-math",
+            "--inline-math",
             "--use-mermaid",
         ]
         for option in options:
@@ -196,10 +196,25 @@ class TestConvert(TestCase):
     def test_disable_inline_math(self):
         stdout = StringIO()
         with patch("sys.stdout", stdout):
-            main(["--disable-inline-math", "--dry-run", str(test_md)])
+            main(["--inline-math", "none", "--dry-run", str(test_md)])
         output = stdout.getvalue()
         self.assertIn("``$E = mc^2$``", output)
         self.assertNotIn(":math:", output)
+
+    def test_dollar_inline_math(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "math.md"
+            source.write_text("$x$ and $`y`$\n")
+            stdout = StringIO()
+            with patch("sys.stdout", stdout):
+                main(["--inline-math", "dollar", "--dry-run", str(source)])
+            self.assertIn(":math:`x`", stdout.getvalue())
+            self.assertIn(":math:`y`", stdout.getvalue())
+
+    def test_invalid_inline_math_option(self):
+        with patch("sys.stderr", StringIO()), self.assertRaises(SystemExit) as error:
+            main(["--inline-math", "unknown", str(test_md)])
+        self.assertEqual(error.exception.code, 2)
 
     def test_parse_relative_links_option(self):
         with tempfile.TemporaryDirectory() as tmpdir:

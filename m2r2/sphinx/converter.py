@@ -21,7 +21,7 @@ class SphinxM2R2(M2R2):
         config = document.settings.env.config
         super().__init__(
             no_underscore_emphasis=config.m2r_no_underscore_emphasis,
-            disable_inline_math=config.m2r_disable_inline_math,
+            inline_math=config.m2r_inline_math,
             parse_relative_links=config.m2r_parse_relative_links,
             anonymous_references=config.m2r_anonymous_references,
             use_mermaid=config.m2r_use_mermaid,

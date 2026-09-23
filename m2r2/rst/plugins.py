@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from re import Match
-from typing import Any
+from typing import Any, Literal
 
 from mistune import BlockParser
 from mistune.core import BlockState, InlineState
@@ -35,6 +35,14 @@ REST_ROLE_PATTERN = r":.*?:`.*?`|`[^`]+`:.*?:"
 REST_LINK_PATTERN = r"`[^`]*?`_"
 RST_FOOTNOTE_REF_PATTERN = r"\[[#][^\]]+\]_"
 INLINE_MATH_PATTERN = r"`\$(?P<math>.*?)\$`"
+# Bare dollar delimiters cannot touch whitespace or close before a digit.
+# Escaped characters stay inside the expression. Double dollars are not inline math.
+DOLLAR_INLINE_MATH_PATTERN = (
+    r"(?<!\$)\$(?!\$)(?:"
+    r"`(?P<quoted_math>(?:\\[^\n]|[^\\`\n])+?)`\$(?!\$)"
+    r"|(?![\s`])(?P<math>(?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])"
+    r")"
+)
 EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
 LITERAL_UNDERSCORE_PATTERN = r"_+"
 
@@ -106,6 +114,24 @@ def parse_inline_math(inline, match: Match[str], state: InlineState):
     token = {"type": "inline_math", "math": math}
     state.append_token(token)
     return match.end()
+
+
+def parse_dollar_inline_math(inline, match: Match[str], state: InlineState):
+    """Preserve LaTeX within dollar or dollar-backtick delimiters."""
+    quoted_math = match.group("quoted_math")
+    math = match.group("math") if quoted_math is None else quoted_math.strip()
+    if math == "":
+        return None
+    state.append_token({"type": "inline_math", "math": math})
+    return match.end()
+
+
+def validate_inline_math(inline_math: object) -> None:
+    """Reject unsupported inline math modes."""
+    if inline_math not in ("legacy", "dollar", None):
+        raise ValueError(
+            f"inline_math must be 'legacy', 'dollar', or None, got {inline_math!r}"
+        )
 
 
 def parse_eol_literal_marker(inline, match: Match[str], state: InlineState):
@@ -209,8 +235,11 @@ def parse_list_with_visual_indentation(
     return state.cursor
 
 
-def configure_markdown_parser_for_rst(markdown):
+def configure_markdown_parser_for_rst(
+    markdown, *, inline_math: Literal["legacy", "dollar"] | None = "legacy"
+):
     """Configure Markdown parsing for conversion to reStructuredText."""
+    validate_inline_math(inline_math)
     markdown.block.register(
         "list", VISUAL_LIST_PATTERN, parse_list_with_visual_indentation
     )
@@ -234,10 +263,21 @@ def configure_markdown_parser_for_rst(markdown):
         before="paragraph",
     )
 
-    # Recognize backtick-delimited math and RST syntax before Markdown code spans.
-    markdown.inline.register(
-        "inline_math", INLINE_MATH_PATTERN, parse_inline_math, before="codespan"
-    )
+    if inline_math == "legacy":
+        markdown.inline.register(
+            "inline_math", INLINE_MATH_PATTERN, parse_inline_math, before="codespan"
+        )
+    elif inline_math == "dollar":
+        markdown.inline.register(
+            "inline_math",
+            DOLLAR_INLINE_MATH_PATTERN,
+            parse_dollar_inline_math,
+            before="codespan",
+        )
+    elif "inline_math" in markdown.inline.rules:
+        markdown.inline.rules.remove("inline_math")
+
+    # Recognize RST syntax before Markdown code spans.
     markdown.inline.register(
         "rest_role", REST_ROLE_PATTERN, parse_rest_role, before="codespan"
     )

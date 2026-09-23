@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from m2r2.m2r2 import __version__, convert
 
@@ -18,7 +18,7 @@ def parse_from_file(
     encoding: str = "utf-8",
     *,
     no_underscore_emphasis: bool = False,
-    disable_inline_math: bool = False,
+    inline_math: Literal["legacy", "dollar"] | None = "legacy",
     parse_relative_links: bool = False,
     anonymous_references: bool = False,
     use_mermaid: bool = False,
@@ -29,7 +29,7 @@ def parse_from_file(
         file: Path to the Markdown file.
         encoding: File encoding. Defaults to "utf-8".
         no_underscore_emphasis: Disable underscore-based emphasis.
-        disable_inline_math: Disable inline math parsing.
+        inline_math: Select legacy or dollar math syntax, or None to disable it.
         parse_relative_links: Convert relative document links to ``:doc:`` roles.
         anonymous_references: Use anonymous RST references for plain link text.
         use_mermaid: Render mermaid code blocks as directives.
@@ -47,7 +47,7 @@ def parse_from_file(
     return convert(
         path.read_text(encoding=encoding),
         no_underscore_emphasis=no_underscore_emphasis,
-        disable_inline_math=disable_inline_math,
+        inline_math=inline_math,
         parse_relative_links=parse_relative_links,
         anonymous_references=anonymous_references,
         use_mermaid=use_mermaid,
@@ -133,9 +133,10 @@ def create_parser() -> argparse.ArgumentParser:
         help="use anonymous references for links with plain text",
     )
     parser.add_argument(
-        "--disable-inline-math",
-        action="store_true",
-        help="disable inline math conversion",
+        "--inline-math",
+        choices=("legacy", "dollar", "none"),
+        default="legacy",
+        help="select inline math syntax, or none to disable it (default: legacy)",
     )
     parser.add_argument(
         "--use-mermaid",
@@ -164,7 +165,7 @@ def run_m2r2(args: argparse.Namespace) -> None:
             no_underscore_emphasis=args.no_underscore_emphasis,
             parse_relative_links=args.parse_relative_links,
             anonymous_references=args.anonymous_references,
-            disable_inline_math=args.disable_inline_math,
+            inline_math=None if args.inline_math == "none" else args.inline_math,
             use_mermaid=args.use_mermaid,
         )
         if args.dry_run:

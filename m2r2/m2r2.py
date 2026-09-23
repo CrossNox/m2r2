@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from importlib.metadata import version
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import mistune
 from mistune.plugins.footnotes import footnotes
@@ -30,7 +30,7 @@ class M2R2:
         plugins: Iterable[str | Plugin] | None = None,
         *,
         no_underscore_emphasis: bool = False,
-        disable_inline_math: bool = False,
+        inline_math: Literal["legacy", "dollar"] | None = "legacy",
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
@@ -48,9 +48,7 @@ class M2R2:
 
         # Create custom plugin function that respects options
         def custom_rst_directives(md):
-            configure_markdown_parser_for_rst(md)
-            if disable_inline_math and "inline_math" in md.inline.rules:
-                md.inline.rules.remove("inline_math")
+            configure_markdown_parser_for_rst(md, inline_math=inline_math)
             if no_underscore_emphasis:
                 md.inline.register(
                     "literal_underscore",
@@ -100,7 +98,7 @@ def convert(
     text: str,
     *,
     no_underscore_emphasis: bool = False,
-    disable_inline_math: bool = False,
+    inline_math: Literal["legacy", "dollar"] | None = "legacy",
     parse_relative_links: bool = False,
     anonymous_references: bool = False,
     use_mermaid: bool = False,
@@ -110,7 +108,7 @@ def convert(
     Args:
         text: Markdown source text.
         no_underscore_emphasis: Disable underscore-based emphasis.
-        disable_inline_math: Disable inline math parsing.
+        inline_math: Select legacy or dollar math syntax, or None to disable it.
         parse_relative_links: Convert relative document links to ``:doc:`` roles.
         anonymous_references: Use anonymous RST references for plain link text.
         use_mermaid: Render mermaid code blocks as directives.
@@ -120,7 +118,7 @@ def convert(
     """
     return M2R2(
         no_underscore_emphasis=no_underscore_emphasis,
-        disable_inline_math=disable_inline_math,
+        inline_math=inline_math,
         parse_relative_links=parse_relative_links,
         anonymous_references=anonymous_references,
         use_mermaid=use_mermaid,

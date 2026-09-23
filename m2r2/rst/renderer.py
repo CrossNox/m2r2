@@ -447,7 +447,7 @@ class RestRenderer(RSTRenderer):
     def inline_math(self, token, state):
         """Render inline math"""
         math = token.get("math", "")
-        return f":math:`{math}`"
+        return rf"\ :math:`{math}`\ "
 
     def eol_literal_marker(self, token, state):
         """Render end-of-line literal marker"""
@@ -646,7 +646,11 @@ class RestRenderer(RSTRenderer):
         `` `text`:role: ``), and a leading space after RST's ``
         breaks docutils' inline literal parser.
         """
-        code = token.get("raw", "").strip()
+        raw = token.get("raw", "")
+        code = raw.strip()
+        if code == "":
+            # RST inline literals cannot contain only whitespace.
+            return self._raw_html(f"<code>{html.escape(raw)}</code>", state)
         if "``" not in code:
             return rf"\ ``{code}``\ "
         else:

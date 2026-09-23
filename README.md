@@ -129,6 +129,41 @@ Under Sphinx, fragment links resolve Markdown headings by their GitHub anchors
 and also resolve explicit RST labels. They no longer become ``:ref:`` roles.
 Absolute `mdinclude` paths now start at the Sphinx source directory.
 
+Replace the Python argument `disable_inline_math=True` with `inline_math=None`
+and the CLI flag `--disable-inline-math` with `--inline-math none`.
+In Sphinx, replace `m2r_disable_inline_math=True` with `m2r_inline_math=None`.
+The old Sphinx name remains an alias and emits a deprecation warning, including
+when set to `False`. An explicit `m2r_inline_math` setting takes precedence.
+
+### Inline math
+
+Choose the syntax with `inline_math` in Python, `m2r_inline_math` in Sphinx, or
+`--inline-math` on the command line:
+
+| Mode | Syntax |
+| --- | --- |
+| `"legacy"` (default) | `` `$x^2$` `` |
+| `"dollar"` | `$x^2$` or `` $`x^2`$ `` |
+| `None` (CLI: `none`) | Disable inline math conversion |
+
+For example:
+
+```python
+convert("An equation: $x^2$.", inline_math="dollar")
+```
+
+In `conf.py`, set `m2r_inline_math = "dollar"` to use the same inline math
+delimiters as GitHub and GitLab. Ordinary code spans remain code in this mode.
+
+Bare `$...$` delimiters must enclose nonempty text on one line without spaces
+at its edges. A closing dollar sign cannot be followed by a digit. These rules
+keep examples such as `$5-$10` and `$20,000 and $30,000` as text. Escape literal
+dollar signs with a backslash when they could be interpreted as delimiters.
+Backslashes inside math expressions, including `\$`, are preserved.
+
+`None` disables only inline math. Fenced `math` blocks still render as math.
+Double-dollar display math is not supported. Use a fenced `math` block instead.
+
 ### Sphinx Integration
 
 In your conf.py, add the following lines.

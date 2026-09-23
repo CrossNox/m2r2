@@ -17,7 +17,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 m2r_no_underscore_emphasis = True
 m2r_parse_relative_links = True
 m2r_anonymous_references = False
-m2r_disable_inline_math = False
+m2r_inline_math = "legacy"
 
 project = "M2R2"
 copyright = "2026, CrossNox"

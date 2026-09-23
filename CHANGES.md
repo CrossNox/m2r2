@@ -2,6 +2,7 @@
 
 #### Breaking changes
 
+* Replace the Python `disable_inline_math` argument with `inline_math`, accepting `"legacy"`, `"dollar"`, or `None`. Replace the CLI flag `--disable-inline-math` with `--inline-math none`.
 * Require Mistune 3.2 or newer so footnote rendering shares document definitions.
 * Remove the `renderer` argument from `M2R2`. `SphinxM2R2` constructs a converter from a docutils document for Sphinx integrations.
 * Make `RestRenderer` render only the document body when it is used directly with Mistune. `M2R2` writes the role and substitution definitions for a complete document.
@@ -13,6 +14,8 @@
 
 #### Fixes and additions
 
+* Add dollar-delimited inline math with `inline_math="dollar"`, supporting `$...$` and dollar-backtick delimiters. Keep `"legacy"` as the default and use `None` to disable inline math.
+* Add the Sphinx setting `m2r_inline_math`. Keep `m2r_disable_inline_math` as a deprecated alias with a warning. An explicit new setting takes precedence.
 * Write document definitions after footnotes render, so links and images in footnotes have their definitions.
 * Preserve emphasis around links and inline markup within link text by using substitutions where RST cannot express the nesting directly.
 * Render empty links as empty references and move footnote references out of link text.
