@@ -1,57 +1,17 @@
 """Sphinx integration tests for m2r2."""
 
-import shutil
-import tempfile
 import warnings
-from io import StringIO
 from pathlib import Path
-from unittest import TestCase
 
 from docutils import nodes
 from sphinx.errors import ConfigError, ExtensionError
 from sphinx.testing.util import SphinxTestApp
 
 from m2r2 import __version__
+from tests.sphinx_project import SphinxProjectTestBase
 
 
-class SphinxTestBase(TestCase):
-    """Base class that builds Sphinx projects and cleans them up after each test."""
-
-    def build_html_project_with_m2r2(
-        self,
-        source_files_by_name: dict[str, str],
-        extra_conf_py: str = "",
-    ) -> tuple[SphinxTestApp, Path, str]:
-        """Build an HTML Sphinx project with m2r2 enabled.
-
-        Return the app, the output directory and the warning log.
-        """
-        tmpdir = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, tmpdir, ignore_errors=True)
-
-        srcdir = Path(tmpdir) / "src"
-        srcdir.mkdir()
-        (srcdir / "conf.py").write_text(f'extensions = ["m2r2"]\n{extra_conf_py}\n')
-
-        for name, content in source_files_by_name.items():
-            (srcdir / name).parent.mkdir(parents=True, exist_ok=True)
-            (srcdir / name).write_text(content)
-
-        warning = StringIO()
-        app = SphinxTestApp(
-            buildername="html",
-            srcdir=srcdir,
-            freshenv=True,
-            status=StringIO(),
-            warning=warning,
-        )
-        self.addCleanup(app.cleanup)
-
-        app.build()
-        return app, Path(app.outdir), warning.getvalue()
-
-
-class TestGithubAlerts(SphinxTestBase):
+class TestGithubAlerts(SphinxProjectTestBase):
     def test_render_alerts_in_markdown_pages_and_includes(self):
         app, outdir, warning = self.build_html_project_with_m2r2(
             {
@@ -75,7 +35,7 @@ class TestGithubAlerts(SphinxTestBase):
         self.assertNotIn("[!TIP]", body)
 
 
-class TestInlineMathConfig(SphinxTestBase):
+class TestInlineMathConfig(SphinxProjectTestBase):
     def build_math_project(self, configuration):
         return self.build_html_project_with_m2r2(
             {
@@ -171,7 +131,7 @@ class TestInlineMathConfig(SphinxTestBase):
             self.build_math_project('m2r_disable_inline_math = "unknown"')
 
 
-class TestSetup(SphinxTestBase):
+class TestSetup(SphinxProjectTestBase):
     """Test the Sphinx extension setup() function."""
 
     def test_config_defaults_registered(self):
@@ -291,7 +251,7 @@ _underscored_ text
         self.assertIn("<em>underscored</em>", (outdir / "index.html").read_text())
 
 
-class TestM2R2Parser(SphinxTestBase):
+class TestM2R2Parser(SphinxProjectTestBase):
     """Test M2R2Parser as a Sphinx source parser."""
 
     def test_unlabelled_code_block(self):
@@ -418,7 +378,7 @@ Plain text only.
         self.assertEqual(list(plain.findall(nodes.image)), [])
 
 
-class TestAlongsideOtherMarkdownParser(SphinxTestBase):
+class TestAlongsideOtherMarkdownParser(SphinxProjectTestBase):
     """Test mdinclude in projects where another extension parses `.md` files."""
 
     def build_project_with_extensions_in_order(
@@ -482,7 +442,26 @@ Test
             )
 
 
-class TestIncludedImages(SphinxTestBase):
+class TestIncludedImages(SphinxProjectTestBase):
+    def test_strikethrough_image_in_include_is_copied(self):
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            {
+                "index.rst": "Index\n=====\n\n.. mdinclude:: parts/part.txt\n",
+                "parts/part.txt": "~~![Logo](logo.svg)~~\n",
+                "parts/logo.svg": "<svg/>",
+            }
+        )
+
+        self.assertEqual(warning, "")
+        images = list(app.env.get_doctree("index").findall(nodes.image))
+        self.assertGreater(len(images), 0)
+        self.assertTrue(all(image["alt"] == "Logo" for image in images))
+        self.assertTrue((outdir / "_images" / "logo.svg").exists())
+        self.assertRegex(
+            (outdir / "index.html").read_text(),
+            r'<del>.*<img[^>]+src="_images/logo\.svg"[^>]*>.*</del>',
+        )
+
     svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>'
 
     def test_resolve_readme_images_outside_source_directory(self):
@@ -624,7 +603,7 @@ class TestIncludedImages(SphinxTestBase):
         self.assertIn("image file not readable: parts/missing.svg", warning)
 
 
-class TestMdInclude(SphinxTestBase):
+class TestMdInclude(SphinxProjectTestBase):
     """Test the mdinclude directive."""
 
     def test_unlabelled_code_block(self):

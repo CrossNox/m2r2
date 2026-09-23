@@ -14,7 +14,7 @@ from m2r2.rst.plugins import (
     configure_markdown_parser_for_rst,
     parse_literal_underscore,
 )
-from m2r2.rst.renderer import RestRenderer, register_document_definition_hook
+from m2r2.rst.renderer import RestRenderer
 
 if TYPE_CHECKING:
     from mistune.plugins import Plugin
@@ -35,12 +35,20 @@ class M2R2:
         anonymous_references: bool = False,
         use_mermaid: bool = False,
     ) -> None:
-        self.renderer = self.build_rest_renderer(
+        self.renderer = RestRenderer(
             parse_relative_links=parse_relative_links,
             anonymous_references=anonymous_references,
             use_mermaid=use_mermaid,
         )
+        self.configure_markdown_parser(plugins, no_underscore_emphasis, inline_math)
 
+    def configure_markdown_parser(
+        self,
+        plugins: Iterable[str | Plugin] | None,
+        no_underscore_emphasis: bool,
+        inline_math: Literal["legacy", "dollar"] | None,
+    ) -> None:
+        """Create the Markdown parser for this converter's renderer."""
         if plugins is None:
             plugins = []
         else:
@@ -57,38 +65,22 @@ class M2R2:
                     before="emphasis",
                 )
 
-        # The definition hook goes last so it runs after the one
-        # the footnote plugin registers.
         plugins.extend(
             [
                 custom_rst_directives,
                 table,
                 footnotes,
                 strikethrough,
-                register_document_definition_hook,
             ]
         )
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=self.renderer, plugins=plugins)
 
-    def build_rest_renderer(
-        self,
-        *,
-        parse_relative_links: bool,
-        anonymous_references: bool,
-        use_mermaid: bool,
-    ) -> RestRenderer:
-        """Build the renderer that turns Markdown tokens into RST."""
-        return RestRenderer(
-            parse_relative_links=parse_relative_links,
-            anonymous_references=anonymous_references,
-            use_mermaid=use_mermaid,
-        )
-
     def parse(self, s: str) -> str:
         """Convert one Markdown document to RST."""
-        return cast(str, self.md(s))
+        rendered_body, markdown_state = self.md.parse(s)
+        return self.renderer.finalize_document(cast(str, rendered_body), markdown_state)
 
     def __call__(self, s: str) -> str:
         return self.parse(s)

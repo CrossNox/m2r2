@@ -258,24 +258,59 @@ See `https://example.com`_.
         )
 
     def test_strikethrough(self):
-        src = "~~a~~"
-        out = self.conv(src)
-        self.assertIn(":raw-html-m2r:`<del>a</del>`", out)
+        document = self.convert_markdown_to_document("~~a~~")
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(
+            [node.astext() for node in paragraph.findall(nodes.raw)],
+            ["<del>", "</del>"],
+        )
+        self.assertIn("a", paragraph.astext())
 
     def test_strikethrough_renders_its_markup_as_html(self):
-        out = self.conv("~~a `b` **c** [d](https://e.com)~~")
-        self.assertIn(
-            '<del>a <code>b</code> <strong>c</strong> <a href="https://e.com">d</a></del>',
-            out,
+        document = self.convert_markdown_to_document(
+            "~~a `b` **c** [d](https://e.com)~~"
+        )
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(
+            [node.astext() for node in paragraph.findall(nodes.raw)],
+            ["<del>", "</del>"],
+        )
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.literal)], ["b"]
+        )
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.strong)], ["c"]
+        )
+        self.assertEqual(
+            [node["refuri"] for node in document.findall(nodes.reference)],
+            ["https://e.com"],
         )
 
-    def test_strikethrough_shows_m2r2_tokens_as_text(self):
-        out = self.conv("~~`$x$` at https://e.com~~")
-        self.assertIn(":raw-html-m2r:`<del>x at https://e.com</del>`", out)
+    def test_strikethrough_preserves_math_and_urls(self):
+        document = self.convert_markdown_to_document("~~`$x$` at https://e.com~~")
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.math)], ["x"]
+        )
+        self.assertEqual(
+            [node["refuri"] for node in document.findall(nodes.reference)],
+            ["https://e.com"],
+        )
 
     def test_strikethrough_puts_footnote_references_after_it(self):
-        out = self.conv("~~a[^1]~~ b\n\n[^1]: note")
-        self.assertIn(":raw-html-m2r:`<del>a</del>`\\ [#fn-1]_ b", out)
+        document = self.convert_markdown_to_document("~~a[^1]~~ b\n\n[^1]: note")
+        paragraph = next(document.findall(nodes.paragraph))
+        children = paragraph.children
+        closing_index = next(
+            index
+            for index, child in enumerate(children)
+            if isinstance(child, nodes.raw) and child.astext() == "</del>"
+        )
+        footnote_index = next(
+            index
+            for index, child in enumerate(children)
+            if isinstance(child, nodes.footnote_reference)
+        )
+        self.assertLess(closing_index, footnote_index)
 
     def test_emphasis(self):
         src = "*a*"
@@ -1762,26 +1797,16 @@ class TestTable(RendererTestBase):
 |---|---|
 | before ![A](a.png) after | ![B](b.png) |
 """
-        expected = """
-.. |m2r-image-d79de0460ffb| image:: a.png
-   :target: a.png
-   :alt: A
-
-.. |m2r-image-bf1518c47185| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - before |m2r-image-d79de0460ffb| after
-     - |m2r-image-bf1518c47185|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        rows = list(table.findall(nodes.row))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([entry.astext() for entry in rows[0].children], ["A", "B"])
+        self.assertEqual(rows[1].children[0].astext(), "before A after")
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in table.findall(nodes.image)],
+            [("a.png", "A"), ("b.png", "B")],
+        )
 
     def test_issue_75_table_linked_image(self):
         source = """\
@@ -1789,26 +1814,17 @@ class TestTable(RendererTestBase):
 |---|---|
 | [![A](a.png)](https://example.com) | ![B](b.png) |
 """
-        expected = """
-.. |m2r-image-486be9324634| image:: a.png
-   :target: https://example.com
-   :alt: A
-
-.. |m2r-image-bf1518c47185| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - |m2r-image-486be9324634|\\
-     - |m2r-image-bf1518c47185|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        images = list(table.findall(nodes.image))
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in images],
+            [("a.png", "A"), ("b.png", "B")],
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in table.findall(nodes.reference)],
+            ["https://example.com", "b.png"],
+        )
 
     def test_issue_75_table_reference_image(self):
         source = """\
@@ -1818,26 +1834,13 @@ class TestTable(RendererTestBase):
 
 [img]: a.png
 """
-        expected = """
-.. |m2r-image-d79de0460ffb| image:: a.png
-   :target: a.png
-   :alt: A
-
-.. |m2r-image-bf1518c47185| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - |m2r-image-d79de0460ffb|\\
-     - |m2r-image-bf1518c47185|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        images = list(table.findall(nodes.image))
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in images],
+            [("a.png", "A"), ("b.png", "B")],
+        )
 
     def test_table(self):
         src = """\
@@ -1865,6 +1868,14 @@ h1 | h2 | h3
 
 
 class TestFootNote(RendererTestBase):
+    def test_footnote_reference_in_image_alt_text(self):
+        document = self.convert_markdown_to_document(
+            "![note[^a]](image.png)\n\n[^a]: note"
+        )
+        images = list(document.findall(nodes.image))
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0]["alt"], "note[a]")
+
     def test_footnote(self):
         src = """\
 This is a[^1] footnote[^2] ref[^ref] with rst [#a]_.

@@ -1,20 +1,17 @@
 """Tests for the GitHub-style heading anchors m2r2 resolves under Sphinx."""
 
 import os
-import shutil
-import tempfile
-from io import StringIO
 from pathlib import Path
 from unittest import TestCase
 
 from docutils import nodes
-from sphinx.testing.util import SphinxTestApp
 
 from m2r2.sphinx.anchors import (
     assign_github_heading_slugs,
     get_or_create_document_anchor_map,
     slugify_heading_like_github,
 )
+from tests.sphinx_project import SphinxProjectTestBase
 
 
 class TestHeadingSlugs(TestCase):
@@ -51,38 +48,7 @@ class TestHeadingSlugs(TestCase):
         )
 
 
-class AnchorProjectTestBase(TestCase):
-    """Create Sphinx projects that m2r2 builds, and build them."""
-
-    def create_project(self, source_files_by_name, extra_conf_py=""):
-        """Write a project with m2r2 enabled and return its source directory."""
-        tmpdir = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, tmpdir, ignore_errors=True)
-
-        srcdir = Path(tmpdir) / "src"
-        srcdir.mkdir()
-        (srcdir / "conf.py").write_text(f'extensions = ["m2r2"]\n{extra_conf_py}\n')
-        for name, content in source_files_by_name.items():
-            (srcdir / name).write_text(content)
-        return srcdir
-
-    def build_project(self, srcdir, *, freshenv=True, parallel=0):
-        """Build a project to HTML and return the app and the warning log."""
-        warning = StringIO()
-        app = SphinxTestApp(
-            buildername="html",
-            srcdir=srcdir,
-            freshenv=freshenv,
-            parallel=parallel,
-            status=StringIO(),
-            warning=warning,
-        )
-        self.addCleanup(app.cleanup)
-        app.build()
-        return app, warning.getvalue()
-
-
-class TestDocumentAnchorMap(AnchorProjectTestBase):
+class TestDocumentAnchorMap(SphinxProjectTestBase):
     """Each document records its ids and GitHub heading anchors."""
 
     def test_anchors_name_the_sections_in_order(self):
@@ -94,7 +60,8 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
                 ),
             }
         )
-        app, _ = self.build_project(srcdir)
+        app, warning = self.build_project(srcdir)
+        self.assertEqual(warning, "")
 
         section_ids = [
             section["ids"][0]
@@ -122,7 +89,8 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
         srcdir = self.create_project(
             {"index.rst": f"Index\n=====\n\n.. toctree::\n\n{toctree}\n", **pages}
         )
-        app, _ = self.build_project(srcdir, parallel=2)
+        app, warning = self.build_project(srcdir, parallel=2)
+        self.assertEqual(warning, "")
 
         anchors = get_or_create_document_anchor_map(app.env)
         for number in range(6):
@@ -133,18 +101,20 @@ class TestDocumentAnchorMap(AnchorProjectTestBase):
 
     def test_rebuild_forgets_a_removed_heading(self):
         srcdir = self.create_project({"index.md": "# Title\n\n## Gone\n\ntext\n"})
-        first_app, _ = self.build_project(srcdir)
+        first_app, first_warning = self.build_project(srcdir)
+        self.assertEqual(first_warning, "")
         first_app.cleanup()
 
         (srcdir / "index.md").write_text("# Title\n\ntext\n")
-        app, _ = self.build_project(srcdir, freshenv=False)
+        app, warning = self.build_project(srcdir, freshenv=False)
+        self.assertEqual(warning, "")
 
         self.assertEqual(
             set(get_or_create_document_anchor_map(app.env)["index"]), {"title"}
         )
 
 
-class TestDocumentAnchorLinks(AnchorProjectTestBase):
+class TestDocumentAnchorLinks(SphinxProjectTestBase):
     """Links to document anchors land on the right elements."""
 
     def find_section_ids(self, app, docname):
@@ -169,6 +139,74 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         self.assertEqual(len(references), 1)
         return references[0]
 
+    def find_image_references(self, app, docname):
+        """Return resolved references that contain an image."""
+        doctree = app.env.get_doctree(docname)
+        app.env.apply_post_transforms(doctree, docname)
+        return [
+            reference
+            for reference in doctree.findall(nodes.reference)
+            if len(list(reference.findall(nodes.image))) > 0
+        ]
+
+    def test_inline_and_table_images_link_to_a_local_anchor(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Index\n\n## Part\n\nBefore [![Logo](logo.svg)](#part) after.\n\n"
+                    "| Image |\n|---|\n| [![Logo](logo.svg)](#part) |\n"
+                ),
+                "logo.svg": "<svg/>",
+            }
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertEqual(warning, "")
+        references = self.find_image_references(app, "index")
+        self.assertEqual(len(references), 2)
+        part_id = self.find_section_ids(app, "index")[1]
+        self.assertEqual(
+            [reference["refid"] for reference in references], [part_id] * 2
+        )
+        self.assertTrue(all(reference[0]["alt"] == "Logo" for reference in references))
+        self.assertTrue((Path(app.outdir) / "_images" / "logo.svg").exists())
+
+        doctree = app.env.get_doctree("index")
+        app.env.apply_post_transforms(doctree, "index")
+        table = next(doctree.findall(nodes.table))
+        self.assertEqual(len(list(table.findall(nodes.image))), 1)
+
+    def test_inline_and_table_images_link_to_another_document_anchor(self):
+        srcdir = self.create_project(
+            {
+                "index.md": (
+                    "# Index\n\nBefore [![Logo](logo.svg)](target.md#part) after.\n\n"
+                    "| Image |\n|---|\n| [![Logo](logo.svg)](target.md#part) |\n\n"
+                    ".. toctree::\n\n   target\n"
+                ),
+                "target.md": "# Target\n\n## Part\n",
+                "logo.svg": "<svg/>",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertEqual(warning, "")
+        references = self.find_image_references(app, "index")
+        self.assertEqual(len(references), 2)
+        part_id = self.find_section_ids(app, "target")[1]
+        self.assertEqual(
+            [reference["refuri"] for reference in references],
+            [f"target.html#{part_id}"] * 2,
+        )
+        self.assertTrue(all(reference[0]["alt"] == "Logo" for reference in references))
+        self.assertTrue((Path(app.outdir) / "_images" / "logo.svg").exists())
+
+        doctree = app.env.get_doctree("index")
+        app.env.apply_post_transforms(doctree, "index")
+        table = next(doctree.findall(nodes.table))
+        self.assertEqual(len(list(table.findall(nodes.image))), 1)
+
     def test_link_to_a_repeated_heading(self):
         srcdir = self.create_project(
             {
@@ -180,7 +218,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         second_bugfixes_id = self.find_section_ids(app, "index")[2]
         self.assertEqual(
             self.find_reference_to_text(app, "index", "the second")["refid"],
@@ -193,7 +231,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         version_id = self.find_section_ids(app, "index")[1]
         self.assertEqual(
             self.find_reference_to_text(app, "index", "it")["refid"], version_id
@@ -212,7 +250,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         second_bugfixes_id = self.find_section_ids(app, "other")[2]
         self.assertEqual(
             self.find_reference_to_text(app, "index", "fixes")["refuri"],
@@ -230,7 +268,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "details")["refid"], "details"
         )
@@ -248,7 +286,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "details")["refuri"],
             "other.html#details",
@@ -266,7 +304,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "details")["refid"],
             "version-10",
@@ -280,7 +318,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         second_foo_id = self.find_section_ids(app, "index")[2]
         self.assertEqual(
             self.find_reference_to_text(app, "index", "second")["refid"], second_foo_id
@@ -298,7 +336,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         for text in ("details", "name"):
             self.assertEqual(
                 self.find_reference_to_text(app, "index", text)["refid"],
@@ -311,7 +349,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         section_id = self.find_section_ids(app, "index")[1]
         for text in ("plain", "encoded"):
             self.assertEqual(
@@ -324,7 +362,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "x")["refid"],
             self.find_section_ids(app, "index")[1],
@@ -340,7 +378,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "there")["refuri"],
             f"caf%C3%A9.html#{self.find_section_ids(app, 'café')[1]}",
@@ -357,7 +395,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         section_ids = self.find_section_ids(app, "index")
         self.assertEqual(
             self.find_reference_to_text(app, "index", "old")["refid"], section_ids[1]
@@ -376,7 +414,8 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
                 "other.md": "# Other\n\n## Bugfixes\n\na\n\n## Bugfixes\n\nb\n",
             }
         )
-        app, _ = self.build_project(srcdir)
+        app, warning = self.build_project(srcdir)
+        self.assertEqual(warning, "")
 
         self.assertIn('href="other.md#bugfixes-1"', self.read_built_page(app, "index"))
 
@@ -412,10 +451,48 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         bugfixes_id = self.find_section_ids(app, "index")[1]
         self.assertEqual(
             self.find_reference_to_text(app, "index", "fixes")["refid"], bugfixes_id
+        )
+
+    def test_link_from_included_markdown_uses_its_source_directory(self):
+        srcdir = self.create_project(
+            {
+                "index.rst": (
+                    "Index\n=====\n\nLocal\n-----\n\n"
+                    ".. mdinclude:: parts/part.txt\n\n"
+                    ".. toctree::\n\n   parts/target\n"
+                ),
+                "parts/part.txt": ("See [part](target.md#part) and [local](#local).\n"),
+                "parts/target.md": "# Target\n\n## Part\n",
+            },
+            extra_conf_py="m2r_parse_relative_links = True",
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertEqual(warning, "")
+        part_id = self.find_section_ids(app, "parts/target")[1]
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "part")["refuri"],
+            f"parts/target.html#{part_id}",
+        )
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "local")["refid"],
+            self.find_section_ids(app, "index")[1],
+        )
+
+    def test_link_label_with_backtick_does_not_create_another_reference(self):
+        srcdir = self.create_project(
+            {"index.md": "# Index\n\n## Part\n\n[``a` b``](#part)\n"}
+        )
+        app, warning = self.build_project(srcdir)
+
+        self.assertEqual(warning, "")
+        self.assertEqual(
+            self.find_reference_to_text(app, "index", "a` b")["refid"],
+            self.find_section_ids(app, "index")[1],
         )
 
     def test_rebuild_still_resolves_links_to_an_unchanged_page(self):
@@ -428,13 +505,14 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         srcdir = self.create_project(
             files, extra_conf_py="m2r_parse_relative_links = True"
         )
-        first_app, _ = self.build_project(srcdir)
+        first_app, first_warning = self.build_project(srcdir)
+        self.assertEqual(first_warning, "")
         first_app.cleanup()
 
         (srcdir / "index.md").write_text(files["index.md"] + "\nMore text.\n")
         app, warning = self.build_project(srcdir, freshenv=False)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         part_id = self.find_section_ids(app, "other")[1]
         self.assertIn(
             f'href="other.html#{part_id}"', self.read_built_page(app, "index")
@@ -450,7 +528,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
             extra_conf_py="m2r_parse_relative_links = True",
         )
         first_app, first_warning = self.build_project(srcdir)
-        self.assertNotIn("m2r2", first_warning)
+        self.assertEqual(first_warning, "")
         old_id = self.find_section_ids(first_app, "target")[2]
         first_app.cleanup()
 
@@ -459,7 +537,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir, freshenv=False)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         new_id = self.find_section_ids(app, "target")[4]
         self.assertNotEqual(old_id, new_id)
         self.assertIn(
@@ -518,7 +596,7 @@ class TestDocumentAnchorLinks(AnchorProjectTestBase):
         )
         app, warning = self.build_project(srcdir, parallel=2)
 
-        self.assertNotIn("m2r2", warning)
+        self.assertEqual(warning, "")
         for number in range(6):
             next_number = (number + 1) % 6
             part_id = self.find_section_ids(app, f"page{next_number}")[1]

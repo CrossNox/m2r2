@@ -19,7 +19,8 @@ from sphinx import addnodes
 from sphinx.util import docname_join, logging
 from sphinx.util.nodes import make_refnode, split_explicit_title
 
-from m2r2.rst.renderer import DOCUMENT_ANCHOR_ROLE_NAME, extract_visible_html_text
+from m2r2.rst.renderer import extract_visible_html_text
+from m2r2.sphinx.constants import DOCUMENT_ANCHOR_ROLE_NAME, IMAGE_ANCHOR_ROLE_NAME
 
 if TYPE_CHECKING:
     from docutils.parsers.rst.states import Inliner
@@ -83,11 +84,23 @@ def get_or_create_document_anchor_references(
     return env.m2r2_document_anchor_references
 
 
-def normalize_target_document_path(source_docname: str, path: str) -> str:
+def normalize_target_document_path(
+    link_source_docname: str, destination_path: str
+) -> str:
     """Resolve an encoded link path relative to its source document."""
-    if path == "":
-        return source_docname
-    return docname_join(source_docname, os.path.splitext(unquote(path))[0])
+    if destination_path == "":
+        return link_source_docname
+    return docname_join(
+        link_source_docname, os.path.splitext(unquote(destination_path))[0]
+    )
+
+
+def find_source_docname_for_link(
+    env: BuildEnvironment, link_source_path: str | os.PathLike[str]
+) -> str:
+    """Name the source file that holds a link relative to the Sphinx source root."""
+    source_relative_path = os.path.relpath(link_source_path, env.srcdir)
+    return os.path.splitext(source_relative_path)[0].replace(os.sep, "/")
 
 
 def find_documents_with_changed_anchor_references(
@@ -165,24 +178,39 @@ def create_document_anchor_reference(
     content: list[str] | None = None,
 ) -> tuple[list[nodes.Node], list[nodes.system_message]]:
     """Create a reference that resolves from a document anchor."""
-    has_title, title, target = split_explicit_title(utils.unescape(text))
-    path, _, fragment = target.partition("#")
+    has_title, role_title, link_destination = split_explicit_title(utils.unescape(text))
+    destination_path, _, anchor_fragment = link_destination.partition("#")
     env = inliner.document.settings.env
-    target_docname = normalize_target_document_path(env.docname, path)
-    references = get_or_create_document_anchor_references(env).setdefault(
-        env.docname, {}
+    link_source_docname = env.docname
+    if destination_path != "":
+        markdown_source_path = inliner.reporter.get_source_and_line(lineno)[0]
+        if markdown_source_path is None:
+            raise ValueError("Cannot resolve an anchor link without a source path")
+        link_source_docname = find_source_docname_for_link(env, markdown_source_path)
+    target_docname = normalize_target_document_path(
+        link_source_docname, destination_path
     )
-    references[target_docname, unquote(fragment)] = None
-    reference = addnodes.pending_xref(
+    document_anchor_references = get_or_create_document_anchor_references(
+        env
+    ).setdefault(env.docname, {})
+    document_anchor_references[target_docname, unquote(anchor_fragment)] = None
+    pending_anchor_reference = addnodes.pending_xref(
         rawtext,
         refdomain="",
-        reftype=DOCUMENT_ANCHOR_ROLE_NAME,
-        reftarget=target,
+        reftype=name,
+        reftarget=link_destination,
         refexplicit=has_title,
         refdoc=inliner.document.settings.env.docname,
+        refsource=link_source_docname,
     )
-    reference += nodes.inline(title, title)
-    return [reference], []
+    if name == IMAGE_ANCHOR_ROLE_NAME:
+        image_substitution_definition = inliner.document.substitution_defs[role_title]
+        pending_anchor_reference += next(
+            image_substitution_definition.findall(nodes.image)
+        ).deepcopy()
+    else:
+        pending_anchor_reference += nodes.inline(role_title, role_title)
+    return [pending_anchor_reference], []
 
 
 def resolve_document_anchor_reference(
@@ -196,13 +224,13 @@ def resolve_document_anchor_reference(
     A link naming a document or an anchor the project lacks gets a warning and
     renders as its text alone.
     """
-    if node["reftype"] != DOCUMENT_ANCHOR_ROLE_NAME:
+    if node["reftype"] not in (DOCUMENT_ANCHOR_ROLE_NAME, IMAGE_ANCHOR_ROLE_NAME):
         return None
 
-    path, _, fragment = node["reftarget"].partition("#")
-    slug = unquote(fragment)
-    source_docname = node["refdoc"]
-    target_docname = normalize_target_document_path(source_docname, path)
+    destination_path, _, anchor_fragment = node["reftarget"].partition("#")
+    anchor_slug = unquote(anchor_fragment)
+    containing_docname = node["refdoc"]
+    target_docname = normalize_target_document_path(node["refsource"], destination_path)
 
     if target_docname not in env.found_docs:
         logger.warning(
@@ -215,11 +243,11 @@ def resolve_document_anchor_reference(
         )
         return contnode
 
-    element_id = get_or_create_document_anchor_map(env)[target_docname].get(slug)
+    element_id = get_or_create_document_anchor_map(env)[target_docname].get(anchor_slug)
     if element_id is None:
         logger.warning(
             "m2r2 found no anchor #%s in %r",
-            slug,
+            anchor_slug,
             target_docname,
             location=node,
             type="m2r2",
@@ -228,13 +256,14 @@ def resolve_document_anchor_reference(
         return contnode
 
     return make_refnode(
-        app.builder, source_docname, target_docname, element_id, contnode
+        app.builder, containing_docname, target_docname, element_id, contnode
     )
 
 
 def register_document_anchors(app: Sphinx) -> None:
     """Register the role and handlers that resolve document anchors."""
     app.add_role(DOCUMENT_ANCHOR_ROLE_NAME, create_document_anchor_reference)
+    app.add_role(IMAGE_ANCHOR_ROLE_NAME, create_document_anchor_reference)
     app.connect("doctree-read", record_document_anchors)
     app.connect("env-purge-doc", forget_document_anchors)
     app.connect("env-merge-info", merge_document_anchors)

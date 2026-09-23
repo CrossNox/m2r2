@@ -1,5 +1,6 @@
 """Tests for the m2r2 CLI."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,35 @@ class TestConvert(TestCase):
         md = tmpdir / "test.md"
         md.write_text(test_md.read_text())
         return md, tmpdir / "test.rst"
+
+    def test_conversion_and_cli_work_without_sphinx(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = Path(tmpdir)
+            (directory / "sphinx.py").write_text(
+                'raise ModuleNotFoundError("Sphinx is unavailable")\n'
+            )
+            markdown = directory / "page.md"
+            markdown.write_text("# Title\n")
+
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = os.pathsep.join(
+                (tmpdir, environment.get("PYTHONPATH", ""))
+            )
+            commands = (
+                [
+                    sys.executable,
+                    "-c",
+                    'from m2r2 import convert; print(convert("# Title"))',
+                ],
+                [sys.executable, "-m", "m2r2", "--dry-run", str(markdown)],
+            )
+            for command in commands:
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        command, capture_output=True, text=True, env=environment
+                    )
+                    self.assertEqual(result.returncode, 0, msg=result.stderr)
+                    self.assertIn("Title", result.stdout)
 
     def test_no_file(self):
         p = subprocess.Popen(

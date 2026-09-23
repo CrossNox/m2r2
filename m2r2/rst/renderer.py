@@ -7,22 +7,15 @@ from collections.abc import Container, Iterable, Iterator
 from contextlib import contextmanager
 from hashlib import sha256
 from html.parser import HTMLParser
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from docutils.utils import column_width, escape2null, unescape
 from mistune.core import BlockState
-from mistune.renderers.html import HTMLRenderer
 from mistune.renderers.rst import RSTRenderer
-
-if TYPE_CHECKING:
-    from mistune import Markdown
 
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
-
-#: The role m2r2's Sphinx extension resolves as a link to a document anchor.
-DOCUMENT_ANCHOR_ROLE_NAME = "m2r-anchor"
 
 #: Hex characters of the hash used to name a substitution.
 SUBSTITUTION_NAME_HASH_LENGTH = 12
@@ -70,9 +63,11 @@ _REFERENCE_ROLE_NAMES = frozenset(
 )
 
 
-def record_role_definition(state: BlockState, name: str, definition: str) -> None:
+def record_role_definition(
+    state: BlockState, role_name: str, role_definition: str
+) -> None:
     """Record a role the body uses, to be defined above it."""
-    state.env.setdefault("role_definitions", {})[name] = definition
+    state.env.setdefault("role_definitions", {})[role_name] = role_definition
 
 
 def define_substitution(
@@ -88,21 +83,25 @@ def define_substitution(
     A ``target_url`` adds the named target that turns the substitution into a
     link.
     """
-    hashed = directive if target_url is None else f"{directive}\n{target_url}"
-    digest = sha256(hashed.encode("utf-8")).hexdigest()
-    name = f"{name_prefix}-{digest[:SUBSTITUTION_NAME_HASH_LENGTH]}"
-    definition = f".. |{name}| {directive}"
+    content_to_hash = directive if target_url is None else f"{directive}\n{target_url}"
+    digest = sha256(content_to_hash.encode("utf-8")).hexdigest()
+    substitution_name = f"{name_prefix}-{digest[:SUBSTITUTION_NAME_HASH_LENGTH]}"
+    substitution_definition = f".. |{substitution_name}| {directive}"
     if target_url is not None:
-        definition += f"\n.. _{name}: {target_url}"
+        substitution_definition += f"\n.. _{substitution_name}: {target_url}"
 
-    definitions = state.env.setdefault("substitution_definitions", {})
-    if definitions.get(name, definition) != definition:
+    substitution_definitions = state.env.setdefault("substitution_definitions", {})
+    if (
+        substitution_definitions.get(substitution_name, substitution_definition)
+        != substitution_definition
+    ):
         raise SubstitutionNameCollision(
-            f"Two substitutions want the name {name}:\n{definitions[name]}\n{definition}"
+            f"Two substitutions want the name {substitution_name}:\n"
+            f"{substitution_definitions[substitution_name]}\n{substitution_definition}"
         )
-    definitions[name] = definition
+    substitution_definitions[substitution_name] = substitution_definition
 
-    return name
+    return substitution_name
 
 
 @contextmanager
@@ -146,6 +145,8 @@ def flatten_to_plain_text(token: dict[str, Any]) -> str:
         return extract_visible_rst_token_text(token)
     if token_type == "rst_footnote_ref":
         return str(token["text"])
+    if token_type == "footnote_ref":
+        return f"[{str(token['raw']).lower()}]"
     if token_type == "eol_literal_marker":
         return str(token["marker"])
     if token_type == "inline_html":
@@ -179,6 +180,11 @@ def escape_reference_characters(text: str) -> str:
     another. Escaped, they render as themselves.
     """
     return re.sub(r"[:@_]", r"\\\g<0>", text)
+
+
+def escape_role_title(text: str) -> str:
+    """Escape characters that would end or alter an RST role's title."""
+    return text.replace("\\", "\\\\").replace("`", "\\`")
 
 
 def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
@@ -243,34 +249,6 @@ def remove_redundant_inline_escapes(text: str) -> str:
     )
 
 
-class StrikethroughHtmlRenderer(HTMLRenderer):
-    """Render the content of a strikethrough as HTML.
-
-    RST has no strikethrough, so it reaches the page as raw HTML, and the markup
-    inside it has to be HTML too. RST that m2r2 passes through from the
-    Markdown has no HTML form and shows as its source text.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(escape=False)
-
-    def render_token(self, token: dict[str, Any], state: BlockState) -> str:
-        """Render a token, including the ones m2r2's own plugins produce."""
-        if token["type"] in ("rest_role", "rest_link", "rst_footnote_ref"):
-            return html.escape(token["text"])
-        if token["type"] == "inline_math":
-            return html.escape(token["math"])
-        if token["type"] == "eol_literal_marker":
-            return html.escape(token["marker"])
-        if token["type"] == "standalone_hyperlink":
-            return html.escape(token["raw"])
-        return super().render_token(token, state)
-
-    def strikethrough(self, text: str) -> str:
-        """Render a strikethrough nested in another one."""
-        return f"<del>{text}</del>"
-
-
 class RestRenderer(RSTRenderer):
     """Render Markdown as RST with embedded directives and inline roles."""
 
@@ -290,15 +268,12 @@ class RestRenderer(RSTRenderer):
         parse_relative_links: bool = False,
         anonymous_references: bool = False,
         use_mermaid: bool = False,
-        is_sphinx: bool = False,
         existing_substitutions: Container[str] = (),
     ) -> None:
         self.parse_relative_links = parse_relative_links
         self.anonymous_references = anonymous_references
         self.use_mermaid = use_mermaid
-        self.is_sphinx = is_sphinx
         self.existing_substitutions = existing_substitutions
-        self.strikethrough_html_renderer = StrikethroughHtmlRenderer()
         super().__init__()
 
     def iter_tokens(
@@ -350,7 +325,7 @@ class RestRenderer(RSTRenderer):
 
         Mistune calls this once for the body and again for the footnotes, so
         the definitions the body relies on are written by
-        ``prepend_document_definitions`` once both passes are done.
+        ``finalize_document`` once both passes are done.
         """
         return self.render_tokens(tokens, state)
 
@@ -406,11 +381,13 @@ class RestRenderer(RSTRenderer):
             first_line = "\n.. mermaid::\n\n"
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
-        elif self.is_sphinx:
-            first_line = "\n::\n\n"
         else:
-            first_line = "\n.. code-block::\n\n"
+            first_line = self.render_unlabeled_code_block()
         return first_line + self._indent_block(code_text) + "\n"
+
+    def render_unlabeled_code_block(self) -> str:
+        """Write the directive that opens a code block without a language."""
+        return "\n.. code-block::\n\n"
 
     def directive(self, token, state):
         """Render RST directive token.
@@ -478,35 +455,33 @@ class RestRenderer(RSTRenderer):
     def render_linked_text(
         self, token: dict[str, Any], state: BlockState, emphasis_marker: str
     ) -> str:
-        """Render a hyperlink, a Sphinx cross-reference, or a linked image."""
-        url = token["attrs"]["url"]
-        children = token["children"]
-        if len(children) == 1 and children[0]["type"] == "image":
-            return self.render_image(children[0], state, target=url)
+        """Render a hyperlink, document role, or linked image."""
+        link_destination = token["attrs"]["url"]
+        link_label_tokens = token["children"]
+        if len(link_label_tokens) == 1 and link_label_tokens[0]["type"] == "image":
+            return self.render_image(
+                link_label_tokens[0], state, target=link_destination
+            )
 
-        url_info = urlparse(url)
-        points_inside_project = url_info.scheme == "" and url_info.netloc == ""
-
-        # A Sphinx role holds plain text, so in either role below the markup in
-        # the link text and the emphasis around the link are both lost.
-        links_to_an_anchor = url_info.fragment != "" and (
-            url_info.path == "" or self.parse_relative_links
+        destination_parts = urlparse(link_destination)
+        points_inside_project = (
+            destination_parts.scheme == "" and destination_parts.netloc == ""
         )
-        if self.is_sphinx and points_inside_project and links_to_an_anchor:
-            # Sphinx resolves the fragment as a document id or a GitHub heading anchor.
-            text = flatten_to_plain_text(token)
-            return rf"\ :{DOCUMENT_ANCHOR_ROLE_NAME}:`{text} <{url}>`\ "
 
         if not points_inside_project or not self.parse_relative_links:
-            return self.render_hyperlink_reference(token, state, url, emphasis_marker)
-        if url_info.path == "":
-            return self.render_hyperlink_reference(token, state, url, emphasis_marker)
+            return self.render_hyperlink_reference(
+                token, state, link_destination, emphasis_marker
+            )
+        if destination_parts.path == "":
+            return self.render_hyperlink_reference(
+                token, state, link_destination, emphasis_marker
+            )
 
         # Document link, e.g. [text](page.md). A :doc: role carries no fragment,
         # so outside Sphinx a link to page.md#anchor loses its anchor.
-        text = flatten_to_plain_text(token)
-        doc_link = os.path.splitext(url_info.path)[0]
-        return rf"\ :doc:`{text} <{doc_link}>`\ "
+        escaped_link_label = escape_role_title(flatten_to_plain_text(token))
+        target_docname = os.path.splitext(destination_parts.path)[0]
+        return rf"\ :doc:`{escaped_link_label} <{target_docname}>`\ "
 
     def render_hyperlink_reference(
         self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
@@ -543,10 +518,10 @@ class RestRenderer(RSTRenderer):
             else:
                 text = self.render_emphasis(token, state, emphasis_marker)
         replacement = self.prepare_substitution_text(text)
-        name = define_substitution(
+        link_substitution_name = define_substitution(
             state, "m2r-link", f"replace:: \\ {replacement}", target_url=url
         )
-        return rf"\ |{name}|_\ "
+        return rf"\ |{link_substitution_name}|_\ "
 
     def prepare_substitution_text(self, text: str) -> str:
         """Normalize inline text for an RST substitution definition."""
@@ -613,8 +588,10 @@ class RestRenderer(RSTRenderer):
 
     def image(self, token: dict[str, Any], state: BlockState) -> str:
         """Render an inline image, linking to its source unless a link holds it."""
-        target = None if is_inside_link_text(state) else token["attrs"]["url"]
-        return self.render_image(token, state, target=target)
+        image_link_target = (
+            None if is_inside_link_text(state) else token["attrs"]["url"]
+        )
+        return self.render_image(token, state, target=image_link_target)
 
     def render_image(
         self,
@@ -625,17 +602,36 @@ class RestRenderer(RSTRenderer):
         inline: bool = True,
     ) -> str:
         """Render an image as a block directive or an inline substitution."""
-        source = token["attrs"]["url"]
-        # docutils takes a directive option as written, without unescaping it.
-        alt = flatten_to_plain_text(token).replace("\n", " ")
-        content = f"image:: {source}"
-        if target is not None:
-            content += f"\n   :target: {target}"
-        content += f"\n   :alt: {alt}"
         if not inline:
-            return f"\n\n.. {content}\n\n"
-        name = define_substitution(state, "m2r-image", content)
-        return rf"\ |{name}|\ "
+            image_directive = self.build_image_directive(token, target)
+            return f"\n\n.. {image_directive}\n\n"
+        image_substitution_name = self.define_image_substitution(token, state, target)
+        return rf"\ |{image_substitution_name}|\ "
+
+    def build_image_directive(
+        self, token: dict[str, Any], image_link_target: str | None
+    ) -> str:
+        """Build an image directive from its URI, link target, and alt text."""
+        image_uri = token["attrs"]["url"]
+        image_alt_text = flatten_to_plain_text(token).replace("\n", " ")
+        image_directive = f"image:: {image_uri}"
+        if image_link_target is not None:
+            image_directive += f"\n   :target: {image_link_target}"
+        image_directive += f"\n   :alt: {image_alt_text}"
+        return image_directive
+
+    def define_image_substitution(
+        self,
+        token: dict[str, Any],
+        state: BlockState,
+        image_link_target: str | None,
+    ) -> str:
+        """Define an inline image and return its substitution name."""
+        return define_substitution(
+            state,
+            "m2r-image",
+            self.build_image_directive(token, image_link_target),
+        )
 
     def block_html(self, token, state):
         """Render block HTML as raw HTML directive"""
@@ -676,13 +672,20 @@ class RestRenderer(RSTRenderer):
             )
 
     def strikethrough(self, token, state):
-        """Render strikethrough as raw HTML, with the footnote references after it.
-
-        This renderer moves footnote references after the struck text.
-        """
+        """Wrap rendered inline content in HTML deletion tags."""
         footnote_references = remove_footnote_references(token)
-        text = self.strikethrough_html_renderer.render_tokens(token["children"], state)
-        return self._raw_html(f"<del>{text}</del>", state) + "".join(
+        opening_del_name = define_substitution(
+            state, "m2r-del-open", "raw:: html\n\n   <del>"
+        )
+        closing_del_name = define_substitution(
+            state, "m2r-del-close", "raw:: html\n\n   </del>"
+        )
+        struck_content = (
+            rf"\ |{opening_del_name}|\ "
+            + self.render_children(token, state)
+            + rf"\ |{closing_del_name}|\ "
+        )
+        return struck_content + "".join(
             self.render_token(reference, state) for reference in footnote_references
         )
 
@@ -824,44 +827,27 @@ class RestRenderer(RSTRenderer):
             return "\n\n" + content
         return ""
 
+    def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
+        """Write role and substitution definitions above the rendered body."""
+        substitution_definitions = [
+            substitution_definition
+            for substitution_name, substitution_definition in markdown_state.env.get(
+                "substitution_definitions", {}
+            ).items()
+            if substitution_name not in self.existing_substitutions
+        ]
 
-def prepend_document_definitions(
-    md: Markdown, result: str | list[dict[str, Any]], state: BlockState
-) -> str | list[dict[str, Any]]:
-    """Write the role and substitution definitions above the rendered body.
+        rest_body = remove_redundant_inline_escapes(
+            merge_adjacent_raw_html_roles("\n" + rendered_body.lstrip("\n"))
+        )
+        if len(substitution_definitions) > 0:
+            rest_document = (
+                "\n" + "\n\n".join(substitution_definitions) + "\n\n" + rest_body
+            )
+        else:
+            rest_document = rest_body
 
-    The definitions come first so that an ``mdinclude`` directive further down
-    the document sees them already defined.
-    """
-    renderer = cast("RestRenderer", md.renderer)
-    substitution_definitions = [
-        definition
-        for name, definition in state.env.get("substitution_definitions", {}).items()
-        if name not in renderer.existing_substitutions
-    ]
-
-    # The definitions hold inline text that was cleaned when it was recorded,
-    # and escapes that docutils needs, so only the body is cleaned here.
-    body = remove_redundant_inline_escapes(
-        merge_adjacent_raw_html_roles("\n" + cast("str", result).lstrip("\n"))
-    )
-
-    if len(substitution_definitions) > 0:
-        document = "\n" + "\n\n".join(substitution_definitions) + "\n\n" + body
-    else:
-        document = body
-
-    role_definitions = list(state.env.get("role_definitions", {}).values())
-    if len(role_definitions) > 0:
-        document = "\n\n".join(role_definitions) + "\n\n" + document
-
-    return document
-
-
-def register_document_definition_hook(md: Markdown) -> None:
-    """Register the hook that writes definitions above a rendered document.
-
-    Mistune runs after-render hooks in registration order, so this plugin goes
-    last, once the footnote plugin has rendered its own pass.
-    """
-    md.after_render_hooks.append(prepend_document_definitions)
+        role_definitions = list(markdown_state.env.get("role_definitions", {}).values())
+        if len(role_definitions) > 0:
+            rest_document = "\n\n".join(role_definitions) + "\n\n" + rest_document
+        return rest_document
