@@ -582,6 +582,16 @@ class RestRenderer(RSTRenderer):
         """
         return "\n\n"
 
+    def github_alert(self, token, state):
+        """Render a GitHub alert as an RST admonition."""
+        children = self.render_children(token, state).strip()
+        if children == "":
+            # RST admonitions require content, even for an empty Markdown alert.
+            children = ".."
+        indented = self._indent_block(children)
+        kind = token["attrs"]["kind"]
+        return f"\n.. {kind}::\n\n{indented}\n\n"
+
     def block_quote(self, token, state):
         """Render block quote"""
         children = self.render_children(token, state)

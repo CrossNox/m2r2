@@ -51,6 +51,30 @@ class SphinxTestBase(TestCase):
         return app, Path(app.outdir), warning.getvalue()
 
 
+class TestGithubAlerts(SphinxTestBase):
+    def test_render_alerts_in_markdown_pages_and_includes(self):
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            {
+                "index.md": (
+                    "# Alerts\n\n> [!WARNING]\n> Back up your **files**.\n\n"
+                    ".. mdinclude:: part.txt\n"
+                ),
+                "part.txt": "> [!TIP]\n> Read the `guide`.\n",
+            }
+        )
+        self.assertEqual(warning, "")
+        document = app.env.get_doctree("index")
+        self.assertEqual(
+            [node.tagname for node in document.findall(nodes.Admonition)],
+            ["warning", "tip"],
+        )
+        body = (outdir / "index.html").read_text()
+        self.assertIn('class="admonition warning"', body)
+        self.assertIn('class="admonition tip"', body)
+        self.assertNotIn("[!WARNING]", body)
+        self.assertNotIn("[!TIP]", body)
+
+
 class TestInlineMathConfig(SphinxTestBase):
     def build_math_project(self, configuration):
         return self.build_html_project_with_m2r2(

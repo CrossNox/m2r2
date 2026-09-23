@@ -164,6 +164,29 @@ Backslashes inside math expressions, including `\$`, are preserved.
 `None` disables only inline math. Fenced `math` blocks still render as math.
 Double-dollar display math is not supported. Use a fenced `math` block instead.
 
+### GitHub alerts
+
+GitHub alerts become RST admonitions automatically:
+
+```markdown
+> [!WARNING]
+> Back up your **files** before proceeding.
+```
+
+This produces:
+
+```rst
+.. warning::
+
+   Back up your **files** before proceeding.
+```
+
+Supported markers are `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and
+`[!CAUTION]`. Put the marker on its own first line in a top-level block quote.
+The body supports Markdown formatting, including paragraphs, lists, and code
+blocks. Alerts nested inside lists or other quotes remain ordinary quotes.
+Emoji shortcodes such as `:warning:` do not create admonitions.
+
 ### Sphinx Integration
 
 In your conf.py, add the following lines.

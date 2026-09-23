@@ -45,6 +45,32 @@ DOLLAR_INLINE_MATH_PATTERN = (
 )
 EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
 LITERAL_UNDERSCORE_PATTERN = r"_+"
+GITHUB_ALERT_PATTERN = re.compile(
+    r" {0,4}\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*"
+)
+
+
+def parse_block_quote_with_github_alert(
+    block: BlockParser, match: Match[str], state: BlockState
+) -> int:
+    """Recognize GitHub alerts at the start of top-level block quotes."""
+    alert = GITHUB_ALERT_PATTERN.fullmatch(match.group("quote_1"))
+    if state.depth() != 0 or alert is None:
+        return block.parse_block_quote(match, state)
+
+    text, end_pos = block.extract_block_quote(match, state)
+    child = state.child_state(text.partition("\n")[2])
+    block.parse(child, block.block_quote_rules)
+    token = {
+        "type": "github_alert",
+        "attrs": {"kind": alert.group(1).lower()},
+        "children": child.tokens,
+    }
+    if end_pos is not None:
+        state.prepend_token(token)
+        return end_pos
+    state.append_token(token)
+    return state.cursor
 
 
 def parse_directive(block, match: Match[str], state: BlockState):
@@ -243,6 +269,7 @@ def configure_markdown_parser_for_rst(
     markdown.block.register(
         "list", VISUAL_LIST_PATTERN, parse_list_with_visual_indentation
     )
+    markdown.block.register("block_quote", None, parse_block_quote_with_github_alert)
     markdown.inline.register("auto_link", None, parse_autolink)
     markdown.inline.register("auto_email", None, parse_autolink)
 
