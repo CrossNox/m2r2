@@ -77,7 +77,7 @@ class SphinxRestRenderer(RestRenderer):
         return super().render_linked_text(token, state, emphasis_marker)
 
     def resolve_image_token(self, image_token: dict[str, Any]) -> dict[str, Any]:
-        """Point a local image at its location relative to the Sphinx document."""
+        """Copy an image token with its path resolved for the Sphinx document."""
         image_uri = image_token["attrs"]["url"]
         document_relative_image_uri = self.resolve_image_path(image_uri)
         return {
@@ -89,7 +89,7 @@ class SphinxRestRenderer(RestRenderer):
         }
 
     def resolve_image_path(self, image_uri: str) -> str:
-        """Resolve a local image from its Markdown file to the Sphinx document."""
+        """Translate Markdown image paths to paths relative to the Sphinx document."""
         image_url_parts = urlsplit(image_uri)
         if (
             image_url_parts.scheme != ""
@@ -112,7 +112,7 @@ class SphinxRestRenderer(RestRenderer):
         *,
         inline: bool = True,
     ) -> str:
-        """Resolve an image path before creating its directive or substitution."""
+        """Render an image with its path resolved for the Sphinx document."""
         original_image_uri = token["attrs"]["url"]
         document_relative_image_token = self.resolve_image_token(token)
         document_relative_image_uri = document_relative_image_token["attrs"]["url"]
@@ -124,11 +124,7 @@ class SphinxRestRenderer(RestRenderer):
 
 
 class SphinxM2R2(M2R2):
-    """Convert Markdown for insertion into a Sphinx document.
-
-    The options come from the project's configuration, and the substitutions
-    the document already defines are left out of the conversion's own.
-    """
+    """Convert Markdown using a Sphinx document's configuration and context."""
 
     def __init__(
         self, document: nodes.document, *, source_path: str | None = None

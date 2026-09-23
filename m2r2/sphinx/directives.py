@@ -15,9 +15,7 @@ _DOCUTILS_INCLUDE_OPTIONS = cast("dict[str, Any]", Include.option_spec)
 class MdInclude(rst.Directive):
     """Include a Markdown file in a Sphinx document.
 
-    The directive is docutils' include, except that the file is Markdown and
-    converts to reStructuredText before docutils parses it. With ``literal`` or
-    ``code``, the file is shown instead of parsed, so nothing converts.
+    Use ``literal`` or ``code`` to display the source without conversion.
     """
 
     required_arguments = 1
@@ -44,9 +42,8 @@ class MdInclude(rst.Directive):
     def find_included_file(self):
         """Return the absolute path of the file to include.
 
-        A relative path is relative to the file holding the directive. An
-        absolute one starts at the Sphinx source directory, as it does for
-        Sphinx's own include.
+        Resolve relative paths from the file containing the directive.
+        Resolve paths starting with ``/`` from the Sphinx source directory.
         """
         include_path = directives.path(self.arguments[0])
         if include_path.startswith("/"):
@@ -59,7 +56,7 @@ class MdInclude(rst.Directive):
         return os.path.normpath(os.path.join(source_directory, include_path))
 
     def select_lines(self, text):
-        """Keep the lines that start-line and end-line, or lines, select."""
+        """Select source lines using the directive's line options."""
         lines = text.splitlines(keepends=True)
         start_line = self.options.get("start-line")
         end_line = self.options.get("end-line")
@@ -78,11 +75,10 @@ class MdInclude(rst.Directive):
         return "".join(lines[index] for index in line_indexes)
 
     def parse_line_selection(self, selection, line_count):
-        """Turn a selection such as "1, 3-4, 7-" into the indexes of the lines it names.
+        """Convert a line selection to zero-based indexes in selection order.
 
-        Each entry is a line number, a range, a range from the first line such
-        as "-4", or a range to the last line such as "7-". Lines come out in the
-        order the entries name them.
+        Accept one-based line numbers and inclusive ranges, such as ``1, 3-4``.
+        Open ranges extend to the first or last line, as in ``-4`` and ``7-``.
         """
         indexes: list[int] = []
         for entry in selection.split(","):
@@ -118,10 +114,10 @@ class MdInclude(rst.Directive):
         return indexes
 
     def clip_text_between_markers(self, text):
-        """Keep the text after the start-after marker and before the end-before one.
+        """Select text using the directive's start and end markers.
 
-        Exclude both markers, as docutils' include does. A missing marker is a
-        severe error.
+        Exclude the markers. Raise a severe directive error if a specified
+        marker is missing.
         """
         start_marker = self.options.get("start-after")
         if start_marker is not None:
@@ -146,7 +142,7 @@ class MdInclude(rst.Directive):
         return text
 
     def show_file_without_converting(self, included_file):
-        """Show the Markdown file as a literal or code block, through docutils' include."""
+        """Display the source file using the directive's literal or code options."""
         include = Include(
             self.name,
             [included_file],

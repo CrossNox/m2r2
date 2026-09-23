@@ -1,10 +1,4 @@
-"""Resolve links to document anchors and GitHub-style heading anchors.
-
-Markdown authors link to a heading with the anchor GitHub gives it, such as
-``#bugfixes-1`` for the second "Bugfixes". docutils and Sphinx name sections
-differently. Record each document's ids and GitHub heading anchors so links
-can point to their targets.
-"""
+"""Resolve Markdown anchor links within Sphinx projects."""
 
 from __future__ import annotations
 
@@ -36,7 +30,7 @@ _KEPT_CATEGORIES = ("Pc",)
 
 
 def slugify_heading_like_github(title: str) -> str:
-    """Turn the text of a heading into the anchor GitHub gives it, before numbering."""
+    """Generate a GitHub-style heading slug without a collision suffix."""
     kept = "".join(
         character
         for character in title.lower()
@@ -48,10 +42,9 @@ def slugify_heading_like_github(title: str) -> str:
 
 
 def assign_github_heading_slugs(titles: Iterable[str]) -> list[str]:
-    """Name each heading of a document the way GitHub does, numbering repeats.
+    """Assign unique GitHub-style slugs to headings in document order.
 
-    The second "Bugfixes" becomes ``bugfixes-1``. A number GitHub would give
-    that another heading already has as its own anchor is skipped.
+    Append numeric suffixes to resolve collisions with previously assigned slugs.
     """
     occurrences: dict[str, int] = {}
     slugs = []
@@ -78,7 +71,7 @@ def get_or_create_document_anchor_map(
 def get_or_create_document_anchor_references(
     env: BuildEnvironment,
 ) -> dict[str, dict[tuple[str, str], str | None]]:
-    """Track the resolved element id of each document's anchor references."""
+    """Return the anchor references and their last resolved IDs for each document."""
     if not hasattr(env, "m2r2_document_anchor_references"):
         env.m2r2_document_anchor_references = {}
     return env.m2r2_document_anchor_references
@@ -98,7 +91,7 @@ def normalize_target_document_path(
 def find_source_docname_for_link(
     env: BuildEnvironment, link_source_path: str | os.PathLike[str]
 ) -> str:
-    """Name the source file that holds a link relative to the Sphinx source root."""
+    """Return the link source's Sphinx document name, without its file extension."""
     source_relative_path = os.path.relpath(link_source_path, env.srcdir)
     return os.path.splitext(source_relative_path)[0].replace(os.sep, "/")
 
@@ -106,7 +99,7 @@ def find_source_docname_for_link(
 def find_documents_with_changed_anchor_references(
     app: Sphinx, env: BuildEnvironment
 ) -> list[str]:
-    """Select pages to rewrite after all target anchor maps have been collected."""
+    """Find documents whose anchor links need updating after a target changes."""
     anchors = get_or_create_document_anchor_map(env)
     documents_to_rewrite = set()
     for docname, references in get_or_create_document_anchor_references(env).items():
@@ -122,7 +115,7 @@ def find_documents_with_changed_anchor_references(
 
 
 def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
-    """Record the ids and GitHub heading anchors of the document just read."""
+    """Map a document's anchor names to its element IDs."""
     sections = list(doctree.findall(nodes.section))
     titles = [extract_visible_heading_text(section[0]) for section in sections]
     slugs = assign_github_heading_slugs(titles)
@@ -147,7 +140,7 @@ def extract_visible_heading_text(node: nodes.Node) -> str:
 
 
 def forget_document_anchors(app: Sphinx, env: BuildEnvironment, docname: str) -> None:
-    """Drop the anchors of a document Sphinx is about to read again."""
+    """Remove a document's cached anchors and anchor references."""
     get_or_create_document_anchor_map(env).pop(docname, None)
     get_or_create_document_anchor_references(env).pop(docname, None)
 
@@ -158,7 +151,7 @@ def merge_document_anchors(
     docnames: Iterable[str],
     other: BuildEnvironment,
 ) -> None:
-    """Take the anchors a worker process of a parallel build recorded."""
+    """Merge anchor data collected by a parallel build worker."""
     anchors = get_or_create_document_anchor_map(env)
     other_anchors = get_or_create_document_anchor_map(other)
     references = get_or_create_document_anchor_references(env)
@@ -177,7 +170,7 @@ def create_document_anchor_reference(
     options: dict[str, Any] | None = None,
     content: list[str] | None = None,
 ) -> tuple[list[nodes.Node], list[nodes.system_message]]:
-    """Create a reference that resolves from a document anchor."""
+    """Create a pending anchor reference with its source document context."""
     has_title, role_title, link_destination = split_explicit_title(utils.unescape(text))
     destination_path, _, anchor_fragment = link_destination.partition("#")
     env = inliner.document.settings.env
@@ -219,10 +212,9 @@ def resolve_document_anchor_reference(
     node: addnodes.pending_xref,
     contnode: nodes.Element,
 ) -> nodes.Element | None:
-    """Point a link at the element whose document anchor it names.
+    """Resolve an anchor reference to its target element.
 
-    A link naming a document or an anchor the project lacks gets a warning and
-    renders as its text alone.
+    Warn if the target is missing and return the link content without a hyperlink.
     """
     if node["reftype"] not in (DOCUMENT_ANCHOR_ROLE_NAME, IMAGE_ANCHOR_ROLE_NAME):
         return None
@@ -261,7 +253,7 @@ def resolve_document_anchor_reference(
 
 
 def register_document_anchors(app: Sphinx) -> None:
-    """Register the role and handlers that resolve document anchors."""
+    """Register Sphinx roles and event handlers for anchor links."""
     app.add_role(DOCUMENT_ANCHOR_ROLE_NAME, create_document_anchor_reference)
     app.add_role(IMAGE_ANCHOR_ROLE_NAME, create_document_anchor_reference)
     app.connect("doctree-read", record_document_anchors)

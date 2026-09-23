@@ -45,7 +45,7 @@ def extract_visible_html_text(fragment: str) -> str:
 
 
 class SubstitutionNameCollision(Exception):
-    """Two substitution definitions in one document want the same name."""
+    """Report conflicting substitution definitions with the same name."""
 
 
 # The middle group accepts escaped characters, but stops at line boundaries
@@ -66,7 +66,7 @@ _REFERENCE_ROLE_NAMES = frozenset(
 def record_role_definition(
     state: BlockState, role_name: str, role_definition: str
 ) -> None:
-    """Record a role the body uses, to be defined above it."""
+    """Register a role definition for the rendered document."""
     state.env.setdefault("role_definitions", {})[role_name] = role_definition
 
 
@@ -76,12 +76,10 @@ def define_substitution(
     directive: str,
     target_url: str | None = None,
 ) -> str:
-    """Record a substitution the body references, and return the name to use.
+    """Register a substitution and return a name based on its content.
 
-    The name holds a hash of the directive, so the same content is defined once
-    per document and an ``mdinclude`` can tell whether its host already has it.
-    A ``target_url`` adds the named target that turns the substitution into a
-    link.
+    Reuse the name for identical definitions. If ``target_url`` is supplied,
+    also register a hyperlink target with that name.
     """
     content_to_hash = directive if target_url is None else f"{directive}\n{target_url}"
     digest = sha256(content_to_hash.encode("utf-8")).hexdigest()
@@ -106,36 +104,30 @@ def define_substitution(
 
 @contextmanager
 def rendering_link_text(state: BlockState) -> Iterator[None]:
-    """Mark what is rendered next as the text of a link."""
+    """Mark the current rendering context as link text."""
     state.env["inside_link_text"] = True
     yield
     state.env["inside_link_text"] = False
 
 
 def is_inside_link_text(state: BlockState) -> bool:
-    """Tell whether the renderer is inside the text of a link."""
     return state.env.get("inside_link_text", False)
 
 
 @contextmanager
 def rendering_heading(state: BlockState) -> Iterator[None]:
-    """Mark what is rendered next as the text of a heading."""
+    """Mark the current rendering context as a heading."""
     state.env["inside_heading"] = True
     yield
     state.env["inside_heading"] = False
 
 
 def is_inside_heading(state: BlockState) -> bool:
-    """Tell whether the renderer is inside the text of a heading."""
     return state.env.get("inside_heading", False)
 
 
 def flatten_to_plain_text(token: dict[str, Any]) -> str:
-    """Join the text a token holds, dropping the markup around it.
-
-    A Sphinx role and a section title both read plain text, so a link rendered
-    into either one has to give up the markup inside it.
-    """
+    """Extract plain text from an inline token and its children."""
     token_type = token["type"]
     if token_type in ("text", "codespan", "standalone_hyperlink"):
         return str(token.get("raw", ""))
@@ -174,11 +166,7 @@ def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
 
 
 def escape_reference_characters(text: str) -> str:
-    """Escape what docutils would read as a URL, an email address or a reference.
-
-    Inside the text of a link, any of those would nest one reference in
-    another. Escaped, they render as themselves.
-    """
+    """Escape characters that could create nested references inside link text."""
     return re.sub(r"[:@_]", r"\\\g<0>", text)
 
 
@@ -188,11 +176,7 @@ def escape_role_title(text: str) -> str:
 
 
 def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
-    """Take the footnote references out of a token's children, keeping their order.
-
-    docutils refuses an auto-numbered footnote reference inside a substitution
-    definition, and inside a link it would nest one reference in another.
-    """
+    """Remove footnote references from a token's children and return them in order."""
     removed: list[dict[str, Any]] = []
     children = token.get("children")
     if children is None:
@@ -225,21 +209,12 @@ def merge_raw_html_match(match: re.Match[str]) -> str:
 
 
 def trim_inline_escapes(text: str) -> str:
-    """Drop the escapes around an inline fragment taken out of a document.
-
-    A definition holds inline text that never sees the pass over the body, so
-    the escapes the renderer wrote at its edges have nothing left to separate.
-    """
+    """Remove unnecessary markup separators from a standalone inline fragment."""
     return remove_redundant_inline_escapes(text.removeprefix("\\ ").removesuffix("\\ "))
 
 
 def remove_redundant_inline_escapes(text: str) -> str:
-    """Drop the ``\\ `` escapes this renderer writes where RST does not need them.
-
-    The renderer separates inline markup from its surroundings with an escaped
-    space. At a line boundary, between spaces, or before a period, that escape
-    carries no meaning.
-    """
+    """Remove escaped spaces where RST needs no inline markup separator."""
     return (
         text.replace("\\ \n", "\n")
         .replace("\n\\ ", "\n")
@@ -250,7 +225,7 @@ def remove_redundant_inline_escapes(text: str) -> str:
 
 
 class RestRenderer(RSTRenderer):
-    """Render Markdown as RST with embedded directives and inline roles."""
+    """Render Markdown tokens as reStructuredText."""
 
     indent = " " * 3
     hmarks: ClassVar[dict[int, str]] = {
@@ -279,15 +254,7 @@ class RestRenderer(RSTRenderer):
     def iter_tokens(
         self, tokens: Iterable[dict[str, Any]], state: BlockState
     ) -> Iterable[str]:
-        """Override to preserve blank lines around RST directives.
-
-        The parent RSTRenderer ignores blank_line tokens, but we need them
-        to maintain proper spacing for RST directives. We emit blank lines:
-        1. Before a directive (RST requires blank line before directives)
-        2. Between consecutive directives (preserve exact spacing)
-        3. After a directive before other content (only if directive doesn't
-           already have trailing blank lines)
-        """
+        """Render tokens while preserving blank lines around RST directives."""
         prev_tok = None
         pending_blank_lines = 0
 
@@ -321,20 +288,18 @@ class RestRenderer(RSTRenderer):
             yield self.render_token(tok, state)
 
     def __call__(self, tokens: Iterable[dict[str, Any]], state: BlockState) -> str:
-        """Render tokens into the body of a document.
+        """Render a token sequence without emitting document definitions.
 
-        Mistune calls this once for the body and again for the footnotes, so
-        the definitions the body relies on are written by
-        ``finalize_document`` once both passes are done.
+        Call ``finalize_document`` after all token sequences have been rendered.
         """
         return self.render_tokens(tokens, state)
 
     def thematic_break(self, token, state):
-        """Override to use shorter horizontal rule"""
+        """Render a thematic break as an RST transition."""
         return "\n----\n"
 
     def linebreak(self, token, state):
-        """Override to use raw HTML format instead of line blocks"""
+        """Render a hard line break as HTML."""
         record_role_definition(state, RAW_HTML_ROLE_NAME, RAW_HTML_ROLE_DEFINITION)
         return f"\\ :{RAW_HTML_ROLE_NAME}:`<br>`\n"
 
@@ -353,7 +318,7 @@ class RestRenderer(RSTRenderer):
         return f"\n{text}\n"
 
     def softbreak(self, token, state):
-        """Override to preserve line breaks instead of converting to spaces"""
+        """Preserve a soft line break as a newline."""
         return "\n"
 
     def _indent_block(self, block):
@@ -390,12 +355,7 @@ class RestRenderer(RSTRenderer):
         return "\n.. code-block::\n\n"
 
     def directive(self, token, state):
-        """Render RST directive token.
-
-        Preserves the raw RST directive text. Trailing newlines are preserved
-        as-is for proper RST spacing between directives. The trailing newlines
-        represent blank lines in the source markdown.
-        """
+        """Preserve an RST directive and any trailing blank lines."""
         text = token.get("raw", "")
 
         # Count trailing newlines
@@ -410,24 +370,23 @@ class RestRenderer(RSTRenderer):
             return content
 
     def rest_role(self, token, state):
-        """Pass through RST role"""
+        """Preserve an RST role verbatim."""
         return token.get("text", "")
 
     def rest_link(self, token, state):
-        """Pass through RST link"""
+        """Preserve an RST link verbatim."""
         return token.get("text", "")
 
     def rst_footnote_ref(self, token, state):
-        """Pass through RST footnote reference like [#a]_"""
+        """Preserve an RST footnote reference verbatim."""
         return token.get("text", "")
 
     def inline_math(self, token, state):
-        """Render inline math"""
+        """Render inline math as an RST math role."""
         math = token.get("math", "")
         return rf"\ :math:`{math}`\ "
 
     def eol_literal_marker(self, token, state):
-        """Render end-of-line literal marker"""
         marker = token.get("marker", "")
         return marker
 
@@ -442,7 +401,7 @@ class RestRenderer(RSTRenderer):
     def render_link(
         self, token: dict[str, Any], state: BlockState, emphasis_marker: str
     ) -> str:
-        """Render a link, with the footnote references from its text after it.
+        """Render a link followed by any footnote references from its label.
 
         ``emphasis_marker`` is the RST emphasis around the link, empty for none.
         """
@@ -455,7 +414,7 @@ class RestRenderer(RSTRenderer):
     def render_linked_text(
         self, token: dict[str, Any], state: BlockState, emphasis_marker: str
     ) -> str:
-        """Render a hyperlink, document role, or linked image."""
+        """Render a link using the configured reference format."""
         link_destination = token["attrs"]["url"]
         link_label_tokens = token["children"]
         if len(link_label_tokens) == 1 and link_label_tokens[0]["type"] == "image":
@@ -486,7 +445,10 @@ class RestRenderer(RSTRenderer):
     def render_hyperlink_reference(
         self, token: dict[str, Any], state: BlockState, url: str, emphasis_marker: str
     ) -> str:
-        """Render a link to a URL, keeping emphasis around it and markup in its text."""
+        """Render an RST hyperlink with a formatted label.
+
+        Flatten label markup in headings.
+        """
         if is_inside_heading(state):
             # docutils names a section after the text of its title as the title
             # reads when parsed, so a substitution reference there would put its
@@ -530,7 +492,7 @@ class RestRenderer(RSTRenderer):
         )
 
     def heading(self, token, state):
-        """Override to fix heading underlines for multibyte characters"""
+        """Render a heading with an underline sized to its display width."""
         # Extract level from token attrs in mistune v3
         if "attrs" in token and "level" in token["attrs"]:
             level = token["attrs"]["level"]
@@ -549,12 +511,7 @@ class RestRenderer(RSTRenderer):
             return f"\n{text}\n"
 
     def rest_code_block(self, token, state):
-        """Absorb standalone ``::`` lines.
-
-        Without this, a bare ``::`` would be parsed as a paragraph and
-        potentially trigger the eol_literal_marker inline rule. The actual
-        code block following ``::`` is handled by mistune's standard rules.
-        """
+        """Consume a standalone literal block marker without rendering it."""
         return "\n\n"
 
     def github_alert(self, token, state):
@@ -568,26 +525,21 @@ class RestRenderer(RSTRenderer):
         return f"\n.. {kind}::\n\n{indented}\n\n"
 
     def block_quote(self, token, state):
-        """Render block quote"""
+        """Render a block quote as indented RST."""
         children = self.render_children(token, state)
         # Indent all lines by 3 spaces and add blank line before/after
         indented = self._indent_block(children.strip())
         return f"\n..\n\n{indented}\n\n"
 
     def text(self, token: dict[str, Any], state: BlockState) -> str:
-        """Render text so RST reads the characters the Markdown holds.
-
-        A backslash in Markdown text is a literal character, while in RST it
-        escapes whatever follows it. Inside a link, the characters that would
-        start another reference are escaped as well.
-        """
+        """Escape parsed Markdown text for its RST context."""
         text = token["raw"].replace("\\", "\\\\").replace("|", "\\|")
         if is_inside_link_text(state):
             return escape_reference_characters(text)
         return text
 
     def image(self, token: dict[str, Any], state: BlockState) -> str:
-        """Render an inline image, linking to its source unless a link holds it."""
+        """Render an inline image with a source link unless already inside a link."""
         image_link_target = (
             None if is_inside_link_text(state) else token["attrs"]["url"]
         )
@@ -634,23 +586,21 @@ class RestRenderer(RSTRenderer):
         )
 
     def block_html(self, token, state):
-        """Render block HTML as raw HTML directive"""
+        """Render block HTML as an RST raw directive."""
         raw = token.get("raw", "").rstrip("\n")
         indented = self._indent_block(raw)
         return f"\n\n.. raw:: html\n\n{indented}\n\n"
 
     def inline_html(self, token, state):
-        """Render inline HTML as raw HTML role"""
+        """Render inline HTML as an RST raw role."""
         raw = token.get("raw", "")
         return self._raw_html(raw, state)
 
     def codespan(self, token, state):
-        """Render inline code span.
+        """Render inline code as an RST literal or raw HTML.
 
-        Leading/trailing whitespace is stripped because CommonMark's
-        double-backtick code spans can preserve spaces (e.g.
-        `` `text`:role: ``), and a leading space after RST's ``
-        breaks docutils' inline literal parser.
+        Trim surrounding whitespace from nonempty code spans. Preserve spans
+        containing only whitespace as HTML.
         """
         raw = token.get("raw", "")
         code = raw.strip()
@@ -754,7 +704,7 @@ class RestRenderer(RSTRenderer):
         return prefix + "".join(items) + "\n"
 
     def table(self, token, state):
-        """Render table as RST list-table directive"""
+        """Render a table as an RST list-table directive."""
         children = token.get("children", [])
         head_content = ""
         body_content = ""
@@ -776,7 +726,7 @@ class RestRenderer(RSTRenderer):
         return result
 
     def _table_row_head_helper(self, token, state):
-        """Helper method for table_head and table_row."""
+        """Render table cells as a row in an RST list-table."""
         cells = token.get("children", [])
         if not cells:
             return ""
@@ -787,23 +737,20 @@ class RestRenderer(RSTRenderer):
         return result
 
     def table_head(self, token, state):
-        """Render table header."""
         return self._table_row_head_helper(token, state)
 
     def table_body(self, token, state):
-        """Render table body"""
         result = ""
         for row in token.get("children", []):
             result += self.table_row(row, state)
         return result
 
     def table_row(self, token, state):
-        """Render table row"""
         return self._table_row_head_helper(token, state)
 
     # Footnote rendering methods
     def footnote_ref(self, token, state):
-        """Render footnote reference"""
+        """Render an automatically numbered RST footnote reference."""
         # Key can be in attrs or directly in raw
         attrs = token.get("attrs", {})
         key = token.get("raw", attrs.get("key", str(attrs.get("index", ""))))
@@ -812,7 +759,7 @@ class RestRenderer(RSTRenderer):
         return rf"\ [#fn-{key}]_\ "
 
     def footnote_item(self, token, state):
-        """Render footnote item"""
+        """Render an RST footnote definition."""
         attrs = token.get("attrs", {})
         key = attrs.get("key", str(attrs.get("index", "")))
         # Normalize to lowercase: mistune v3 uppercases footnote keys internally
@@ -821,14 +768,13 @@ class RestRenderer(RSTRenderer):
         return f".. [#fn-{key}] {content}\n"
 
     def footnotes(self, token, state):
-        """Render footnotes block"""
         content = self.render_children(token, state)
         if content:
             return "\n\n" + content
         return ""
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
-        """Write role and substitution definitions above the rendered body."""
+        """Assemble the rendered document with its required definitions."""
         substitution_definitions = [
             substitution_definition
             for substitution_name, substitution_definition in markdown_state.env.get(
