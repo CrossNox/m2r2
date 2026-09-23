@@ -14,6 +14,7 @@
 
 #### Fixes and additions
 
+* Resolve relative Markdown image paths from the included file's directory, including nested includes. Keep image substitutions distinct when different files use the same relative image path.
 * Convert GitHub alerts (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and `[!CAUTION]`) into RST admonitions.
 * Add dollar-delimited inline math with `inline_math="dollar"`, supporting `$...$` and dollar-backtick delimiters. Keep `"legacy"` as the default and use `None` to disable inline math.
 * Add the Sphinx setting `m2r_inline_math`. Keep `m2r_disable_inline_math` as a deprecated alias with a warning. An explicit new setting takes precedence.

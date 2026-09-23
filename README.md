@@ -239,6 +239,12 @@ Markdown file:
 A relative path starts at the file holding the directive. A path beginning
 with `/` starts at the Sphinx source directory.
 
+Relative Markdown image paths, such as `![Badge](assets/badge.svg)`, start at
+the included Markdown file's directory. This also applies to inline images,
+tables, and nested includes. For example, a project-root `README.md` included
+from `docs/index.rst` can use images from `assets/` beside the README without
+symlinks. Image paths beginning with `/` start at the Sphinx source directory.
+
 The directive accepts these options:
 
 * `start-line` is zero-based and `end-line` is exclusive. For example,

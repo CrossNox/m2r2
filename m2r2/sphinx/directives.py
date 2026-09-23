@@ -212,7 +212,7 @@ class MdInclude(rst.Directive):
         raw_text = self.select_lines(raw_text)
         raw_text = self.clip_text_between_markers(raw_text)
 
-        converter = SphinxM2R2(self.state.document)
+        converter = SphinxM2R2(self.state.document, source_path=included_file)
         include_lines = statemachine.string2lines(
             converter(raw_text), tab_width, convert_whitespace=True
         )

@@ -482,6 +482,148 @@ Test
             )
 
 
+class TestIncludedImages(SphinxTestBase):
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>'
+
+    def test_resolve_readme_images_outside_source_directory(self):
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            {
+                "index.rst": "Images\n======\n\n.. mdinclude:: ../README.md\n",
+                "../README.md": (
+                    "![Block](assets/block.svg)\n\n"
+                    "Inline ![Inline](assets/inline.svg) image.\n\n"
+                    "[![Linked](assets/linked.svg)](https://example.org)\n\n"
+                    "| Image |\n| --- |\n| ![Table](assets/table.svg) |\n\n"
+                    "![Reference][badge]\n\n[badge]: assets/reference.svg\n\n"
+                    "Footnote[^image].\n\n[^image]: See ![Footnote](assets/footnote.svg).\n"
+                ),
+                **{
+                    f"../assets/{name}.svg": self.svg
+                    for name in (
+                        "block",
+                        "inline",
+                        "linked",
+                        "table",
+                        "reference",
+                        "footnote",
+                    )
+                },
+            }
+        )
+        self.assertEqual(warning, "")
+        images = list(app.env.get_doctree("index").findall(nodes.image))
+        self.assertEqual(
+            {image["uri"] for image in images},
+            {
+                f"../assets/{name}.svg"
+                for name in (
+                    "block",
+                    "inline",
+                    "linked",
+                    "table",
+                    "reference",
+                    "footnote",
+                )
+            },
+        )
+        dependencies = {
+            (Path(app.srcdir) / path).resolve()
+            for path in app.env.dependencies["index"]
+        }
+        for image in images:
+            filename = Path(image["uri"]).name
+            self.assertEqual((outdir / "_images" / filename).read_text(), self.svg)
+            self.assertIn((Path(app.srcdir) / image["uri"]).resolve(), dependencies)
+        body = (outdir / "index.html").read_text()
+        self.assertIn('href="https://example.org"', body)
+
+    def test_resolve_nested_includes_from_each_markdown_directory(self):
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            {
+                "index.rst": "Images\n======\n\n.. toctree::\n\n   sub/page\n",
+                "sub/page.rst": "Page\n====\n\n.. mdinclude:: ../../README.md\n",
+                "../README.md": (
+                    "![Outer](assets/outer.svg)\n\n.. mdinclude:: parts/inner.txt\n"
+                ),
+                "../assets/outer.svg": self.svg,
+                "../parts/inner.txt": "![Inner](assets/inner.svg)\n",
+                "../parts/assets/inner.svg": self.svg,
+            }
+        )
+        self.assertEqual(warning, "")
+        images = list(app.env.get_doctree("sub/page").findall(nodes.image))
+        self.assertEqual(
+            [image["uri"] for image in images],
+            ["../assets/outer.svg", "../parts/assets/inner.svg"],
+        )
+        body = (outdir / "sub" / "page.html").read_text()
+        for filename in ("outer.svg", "inner.svg"):
+            self.assertTrue((outdir / "_images" / filename).is_file())
+            self.assertIn(f'src="../_images/{filename}"', body)
+
+    def test_distinguish_identical_image_names_in_different_includes(self):
+        app, outdir, warning = self.build_html_project_with_m2r2(
+            {
+                "index.md": (
+                    "# Images\n\nBefore ![Badge](badge.svg) after.\n\n"
+                    ".. mdinclude:: first/part.txt\n\n"
+                    ".. mdinclude:: second/part.txt\n\n"
+                    ".. mdinclude:: first/part.txt\n"
+                ),
+                "badge.svg": self.svg,
+                "first/part.txt": "Before ![Badge](badge.svg) after.\n",
+                "first/badge.svg": self.svg.replace('width="10"', 'width="20"'),
+                "second/part.txt": "Before ![Badge](badge.svg) after.\n",
+                "second/badge.svg": self.svg.replace('width="10"', 'width="30"'),
+            }
+        )
+        self.assertEqual(warning, "")
+        images = [
+            image
+            for paragraph in app.env.get_doctree("index").findall(nodes.paragraph)
+            for image in paragraph.findall(nodes.image)
+        ]
+        self.assertEqual(
+            [image["uri"] for image in images],
+            ["badge.svg", "first/badge.svg", "second/badge.svg", "first/badge.svg"],
+        )
+        for uri in ("badge.svg", "first/badge.svg", "second/badge.svg"):
+            filename = app.env.images[uri][1]
+            self.assertEqual(
+                (outdir / "_images" / filename).read_text(),
+                (Path(app.srcdir) / uri).read_text(),
+            )
+
+    def test_keep_remote_and_source_root_image_paths(self):
+        app, _, warning = self.build_html_project_with_m2r2(
+            {
+                "index.rst": "Images\n======\n\n.. mdinclude:: parts/images.txt\n",
+                "parts/images.txt": (
+                    "![Remote](https://example.org/badge.svg)\n\n"
+                    "![Root](/assets/root.svg)\n"
+                ),
+                "assets/root.svg": self.svg,
+            }
+        )
+        self.assertEqual(warning, "")
+        self.assertEqual(
+            [
+                image["uri"]
+                for image in app.env.get_doctree("index").findall(nodes.image)
+            ],
+            ["https://example.org/badge.svg", "assets/root.svg"],
+        )
+
+    def test_report_missing_image_relative_to_included_file(self):
+        _, _, warning = self.build_html_project_with_m2r2(
+            {
+                "index.rst": "Images\n======\n\n.. mdinclude:: parts/images.txt\n",
+                "parts/images.txt": "![Missing](missing.svg)\n",
+            }
+        )
+        self.assertIn("image file not readable: parts/missing.svg", warning)
+
+
 class TestMdInclude(SphinxTestBase):
     """Test the mdinclude directive."""
 
