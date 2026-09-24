@@ -1,4 +1,4 @@
-### Version 2.0.0 (2026-09-22)
+### Version 2.0.0 (unreleased)
 
 #### Breaking changes
 
