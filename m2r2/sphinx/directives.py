@@ -2,7 +2,6 @@ import os
 from typing import Any, ClassVar, cast
 
 from docutils import io, statemachine, utils
-from docutils.parsers import rst
 from docutils.parsers.rst import directives
 from docutils.parsers.rst.directives.misc import Include
 
@@ -12,7 +11,7 @@ from m2r2.sphinx.converter import SphinxM2R2
 _DOCUTILS_INCLUDE_OPTIONS = cast("dict[str, Any]", Include.option_spec)
 
 
-class MdInclude(rst.Directive):
+class MdInclude(Include):
     """Include a Markdown file in a Sphinx document.
 
     Use ``literal`` or ``code`` to display the source without conversion.
@@ -20,6 +19,7 @@ class MdInclude(rst.Directive):
 
     required_arguments = 1
     optional_arguments = 0
+    final_argument_whitespace = False
     # Every option of docutils' include but "parser", since the parser is what
     # this directive chooses. The options that show the file take docutils'
     # own converters, so they read the same as in the version installed.
@@ -141,21 +141,6 @@ class MdInclude(rst.Directive):
 
         return text
 
-    def show_file_without_converting(self, included_file):
-        """Display the source file using the directive's literal or code options."""
-        include = Include(
-            self.name,
-            [included_file],
-            self.options,
-            self.content,
-            self.lineno,
-            self.content_offset,
-            self.block_text,
-            self.state,
-            self.state_machine,
-        )
-        return include.run()
-
     def run(self):
         settings = self.state.document.settings
         if not settings.file_insertion_enabled:
@@ -173,7 +158,8 @@ class MdInclude(rst.Directive):
                     f'Problem with "lines" option of "{self.name}" directive:\n'
                     'It cannot be combined with "literal" or "code".'
                 )
-            return self.show_file_without_converting(included_file)
+            self.arguments = [included_file]
+            return super().run()
 
         path = utils.relative_path(None, included_file)
         encoding = self.options.get("encoding", settings.input_encoding)
