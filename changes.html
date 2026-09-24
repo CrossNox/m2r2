@@ -5,11 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Change Log &#8212; M2R2 2.0.0 documentation</title>
+    <title>Change Log &#8212; M2R2 2.1.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=6351133d" />
-    <script src="_static/documentation_options.js?v=51b770b3"></script>
+    <script src="_static/documentation_options.js?v=20623aea"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
@@ -42,13 +42,19 @@
             
   <section id="change-log">
 <h1>Change Log<a class="headerlink" href="#change-log" title="Link to this heading">¶</a></h1>
+<section id="version-2-1-0-2026-09-24">
+<h2>Version 2.1.0 (2026-09-24)<a class="headerlink" href="#version-2-1-0-2026-09-24" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Support Mistune 3.3.</p></li>
+</ul>
+</section>
 <section id="version-2-0-0-2026-09-24">
 <h2>Version 2.0.0 (2026-09-24)<a class="headerlink" href="#version-2-0-0-2026-09-24" title="Link to this heading">¶</a></h2>
 <section id="breaking-changes">
 <h3>Breaking changes<a class="headerlink" href="#breaking-changes" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Replace the Python <code class="docutils literal notranslate"><span class="pre">disable_inline_math</span></code> argument with <code class="docutils literal notranslate"><span class="pre">inline_math</span></code>, accepting <code class="docutils literal notranslate"><span class="pre">&quot;legacy&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;dollar&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
-<li><p>Require Mistune 3.2 or newer so footnote rendering shares document definitions.</p></li>
+<li><p>Require Mistune 3.2 so footnote rendering shares document definitions.</p></li>
 <li><p>Remove the <code class="docutils literal notranslate"><span class="pre">renderer</span></code> argument from <code class="docutils literal notranslate"><span class="pre">M2R2</span></code>. <code class="docutils literal notranslate"><span class="pre">SphinxM2R2</span></code> constructs a converter from a docutils document for Sphinx integrations.</p></li>
 <li><p>Make <code class="docutils literal notranslate"><span class="pre">RestRenderer</span></code> render only the document body when it is used directly with Mistune. <code class="docutils literal notranslate"><span class="pre">M2R2</span></code> writes the role and substitution definitions for a complete document.</p></li>
 <li><p>Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.</p></li>
