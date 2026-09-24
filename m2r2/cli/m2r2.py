@@ -41,12 +41,12 @@ def parse_from_file(
     Raises:
         FileNotFoundError: If the file does not exist.
     """
-    path = Path(file)
-    if not path.exists():
-        raise FileNotFoundError(f"No such file exists: {path}")
+    source_path = Path(file)
+    if not source_path.exists():
+        raise FileNotFoundError(f"No such file exists: {source_path}")
 
     return convert(
-        path.read_text(encoding=encoding),
+        source_path.read_text(encoding=encoding),
         no_underscore_emphasis=no_underscore_emphasis,
         inline_math=inline_math,
         parse_relative_links=parse_relative_links,
@@ -72,21 +72,23 @@ def save_to_file(
     Returns:
         True if file was written, False if skipped.
     """
-    target = Path(file).with_suffix(".rst")
+    output_path = Path(file).with_suffix(".rst")
 
-    if not overwrite and target.exists():
+    if not overwrite and output_path.exists():
         if not sys.stdin.isatty():
             print(
                 f"Skipping {file} (use --overwrite in non-interactive mode)",
                 file=sys.stderr,
             )
             return False
-        confirm = input(f"{target} already exists. Overwrite it? [y/N]: ").lower()
-        if confirm not in ("y", "yes"):
+        confirmation = input(
+            f"{output_path} already exists. Overwrite it? [y/N]: "
+        ).lower()
+        if confirmation not in ("y", "yes"):
             print(f"Skipping {file}", file=sys.stderr)
             return False
 
-    target.write_text(content, encoding=encoding)
+    output_path.write_text(content, encoding=encoding)
     return True
 
 
@@ -160,14 +162,14 @@ def run_m2r2(args: argparse.Namespace) -> None:
         args: Parsed command-line arguments.
     """
     # Validate all input files exist before processing any
-    missing = [f for f in args.input_files if not f.exists()]
-    if len(missing) > 0:
-        for f in missing:
-            print(f"Error: No such file exists: {f}", file=sys.stderr)
+    missing_files = [file for file in args.input_files if not file.exists()]
+    if len(missing_files) > 0:
+        for missing_file in missing_files:
+            print(f"Error: No such file exists: {missing_file}", file=sys.stderr)
         sys.exit(1)
 
     for file in args.input_files:
-        output = parse_from_file(
+        converted_text = parse_from_file(
             file,
             no_underscore_emphasis=args.no_underscore_emphasis,
             parse_relative_links=args.parse_relative_links,
@@ -176,9 +178,9 @@ def run_m2r2(args: argparse.Namespace) -> None:
             use_mermaid=args.use_mermaid,
         )
         if args.dry_run:
-            print(output)
+            print(converted_text)
         else:
-            save_to_file(file, output, overwrite=args.overwrite)
+            save_to_file(file, converted_text, overwrite=args.overwrite)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
