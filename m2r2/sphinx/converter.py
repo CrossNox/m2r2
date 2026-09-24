@@ -129,6 +129,13 @@ class SphinxM2R2(BaseM2R2):
     def __init__(
         self, document: nodes.document, *, source_path: str | None = None
     ) -> None:
+        """Initialize a converter from a Sphinx document.
+
+        Args:
+            document: Document that supplies conversion settings.
+            source_path: Markdown source path used to resolve relative images.
+                Defaults to the document source.
+        """
         sphinx_config = document.settings.env.config
         markdown_source_path = (
             document["source"] if source_path is None else source_path

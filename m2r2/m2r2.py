@@ -33,6 +33,15 @@ class BaseM2R2:
         no_underscore_emphasis: bool = False,
         inline_math: Literal["legacy", "dollar"] | None = "legacy",
     ) -> None:
+        """Initialize the Markdown parser with an RST renderer.
+
+        Args:
+            renderer: Renderer used for conversion and document assembly.
+            plugins: Additional Mistune plugins.
+            no_underscore_emphasis: Disable underscore-based emphasis.
+            inline_math: Enable inline math with "legacy" or "dollar" syntax, or
+                use None to disable it.
+        """
         self.renderer = renderer
 
         if plugins is None:
@@ -78,6 +87,17 @@ class M2R2(BaseM2R2):
         anonymous_references: bool = False,
         use_mermaid: bool = False,
     ) -> None:
+        """Initialize a Markdown to reStructuredText converter.
+
+        Args:
+            plugins: Additional Mistune plugins.
+            no_underscore_emphasis: Disable underscore-based emphasis.
+            inline_math: Enable inline math with "legacy" or "dollar" syntax, or
+                use None to disable it.
+            parse_relative_links: Convert relative document links to ``:doc:`` roles.
+            anonymous_references: Use anonymous RST references for plain link text.
+            use_mermaid: Render Mermaid code blocks as directives.
+        """
         renderer = RestRenderer(
             parse_relative_links=parse_relative_links,
             anonymous_references=anonymous_references,
@@ -105,7 +125,8 @@ def convert(
     Args:
         text: Markdown source text.
         no_underscore_emphasis: Disable underscore-based emphasis.
-        inline_math: Select legacy or dollar math syntax, or None to disable it.
+        inline_math: Enable inline math with "legacy" or "dollar" syntax, or
+            use None to disable it.
         parse_relative_links: Convert relative document links to ``:doc:`` roles.
         anonymous_references: Use anonymous RST references for plain link text.
         use_mermaid: Render mermaid code blocks as directives.
