@@ -18,25 +18,25 @@ def parse_block_quote_with_github_alert(
     block: BlockParser, match: Match[str], state: BlockState
 ) -> int:
     """Recognize GitHub alerts at the start of top-level block quotes."""
-    alert = re.fullmatch(
+    alert_match = re.fullmatch(
         r" {0,4}\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*",
         match.group("quote_1"),
     )
-    if state.depth() != 0 or alert is None:
+    if state.depth() != 0 or alert_match is None:
         return block.parse_block_quote(match, state)
 
-    text, end_pos = block.extract_block_quote(match, state)
-    child = state.child_state(text.partition("\n")[2])
-    block.parse(child, block.block_quote_rules)
-    token = {
+    quote_text, end_position = block.extract_block_quote(match, state)
+    alert_state = state.child_state(quote_text.partition("\n")[2])
+    block.parse(alert_state, block.block_quote_rules)
+    alert_token = {
         "type": "github_alert",
-        "attrs": {"kind": alert.group(1).lower()},
-        "children": child.tokens,
+        "attrs": {"kind": alert_match.group(1).lower()},
+        "children": alert_state.tokens,
     }
-    if end_pos is not None:
-        state.prepend_token(token)
-        return end_pos
-    state.append_token(token)
+    if end_position is not None:
+        state.prepend_token(alert_token)
+        return end_position
+    state.append_token(alert_token)
     return state.cursor
 
 
