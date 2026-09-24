@@ -114,27 +114,84 @@ In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
 
 ### Upgrading to 2.0
 
-`M2R2` no longer accepts a custom `renderer`. Use `M2R2` for complete documents.
-Sphinx integrations can import `SphinxM2R2` from `m2r2.sphinx.converter` and
-construct it from the current docutils document. A `RestRenderer` used directly
-with Mistune renders only the document body and does not prepend its role or
-substitution definitions. Mistune 3.2 or newer is required.
+If you pin Mistune separately, change the pin to `mistune>=3.2,<3.3`. Otherwise,
+let the `m2r2` dependency select a compatible version.
 
-RST cannot nest inline markup directly. M2R2 uses substitutions so links can
-preserve emphasis around them and inline markup in their text.
-Links rendered as Sphinx roles remain plain text. Link titles are discarded,
-and generated substitution names are shorter.
+#### Update Python calls
 
-Under Sphinx, fragment links resolve Markdown headings by their GitHub anchors
-and also resolve explicit RST labels. They no longer become ``:ref:`` roles.
-Absolute `mdinclude` paths now start at the Sphinx source directory.
+Replace `disable_inline_math=True` with `inline_math=None` in calls to
+`convert`, `parse_from_file`, and `M2R2`:
 
-Replace the Python argument `disable_inline_math=True` with `inline_math=None`.
-The CLI keeps `--disable-inline-math` and adds `--inline-math legacy` or
-`--inline-math dollar`.
-In Sphinx, replace `m2r_disable_inline_math=True` with `m2r_inline_math=None`.
-The old Sphinx name remains an alias and emits a deprecation warning, including
-when set to `False`. An explicit `m2r_inline_math` setting takes precedence.
+```python
+# 1.x
+convert(markdown, disable_inline_math=True)
+
+# 2.0
+convert(markdown, inline_math=None)
+```
+
+Remove `disable_inline_math=False` wherever you set it. The default remains
+`"legacy"`. To parse `$x$` instead of the legacy `` `$x$` `` form, pass
+`inline_math="dollar"`. The CLI still accepts `--disable-inline-math`. Use
+`--inline-math dollar` to select dollar delimiters there.
+
+If you passed a `RestRenderer` to `M2R2` only to set its options, pass those
+options to `M2R2` instead. The `plugins` argument still works:
+
+```python
+# 1.x
+M2R2(renderer=RestRenderer(parse_relative_links=True), plugins=plugins)
+
+# 2.0
+M2R2(parse_relative_links=True, plugins=plugins)
+```
+
+Do the same for `anonymous_references` and `use_mermaid`. If you used
+`RestRenderer` directly with Mistune, switch to `M2R2` to obtain a complete RST
+document. Direct rendering now omits the required role and substitution
+definitions.
+
+For a custom Sphinx parser or directive, construct the converter from the
+current docutils document:
+
+```python
+from m2r2.sphinx.converter import SphinxM2R2
+
+rst = SphinxM2R2(document, source_path=markdown_path)(markdown)
+```
+
+The built-in `m2r2` and `m2r2.mdinclude` extensions need no converter changes.
+
+#### Update Sphinx configuration
+
+In `conf.py`, replace `m2r_disable_inline_math = True` with
+`m2r_inline_math = None`. Remove `m2r_disable_inline_math = False` to keep the
+default legacy syntax. To select dollar delimiters, set
+`m2r_inline_math = "dollar"`. The old name still works but emits a deprecation
+warning.
+
+#### Review Markdown and generated RST
+
+Build your Sphinx project and check fragment links. Links to Markdown headings
+now use GitHub heading slugs, such as `#installation` or `#installation-1` for
+a repeated heading. Explicit RST labels still resolve. Set
+`m2r_parse_relative_links = True` in `conf.py` if you link to a heading in
+another Markdown file, such as `[Install](guide.md#installation)`. Fix any
+`m2r2.anchor` warnings by correcting the document path or fragment.
+
+A leading `/` in `.. mdinclude:: /part.md` now points to `part.md` in the Sphinx
+source directory. For a file outside that directory, use a path relative to the
+file containing the directive. Check image paths in included Markdown too.
+They now resolve from the included file's directory.
+
+Remove any `:parser:` option from `mdinclude`. The directive always parses
+Markdown. If a link uses a Markdown title such as `[Guide](guide.md "extra")`,
+move important title text into the visible link text or nearby prose. RST output
+does not retain link titles.
+
+If you keep generated RST or snapshots in your repository, regenerate them.
+Generated substitution names have changed. Avoid referencing those names from
+handwritten RST.
 
 ### Inline math
 
