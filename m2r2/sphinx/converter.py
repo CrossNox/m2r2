@@ -4,7 +4,7 @@ import os
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse, urlsplit
 
-from m2r2.m2r2 import M2R2
+from m2r2.m2r2 import BaseM2R2
 from m2r2.rst.renderer import (
     RestRenderer,
     escape_role_title,
@@ -123,7 +123,7 @@ class SphinxRestRenderer(RestRenderer):
         )
 
 
-class SphinxM2R2(M2R2):
+class SphinxM2R2(BaseM2R2):
     """Convert Markdown using a Sphinx document's configuration and context."""
 
     def __init__(
@@ -133,15 +133,16 @@ class SphinxM2R2(M2R2):
         markdown_source_path = (
             document["source"] if source_path is None else source_path
         )
-        self.renderer = SphinxRestRenderer(
+        renderer = SphinxRestRenderer(
             document,
             markdown_source_path,
             parse_relative_links=sphinx_config.m2r_parse_relative_links,
             anonymous_references=sphinx_config.m2r_anonymous_references,
             use_mermaid=sphinx_config.m2r_use_mermaid,
         )
-        self.configure_markdown_parser(
-            None,
-            sphinx_config.m2r_no_underscore_emphasis,
-            sphinx_config.m2r_inline_math,
+        super().__init__(
+            renderer=renderer,
+            plugins=None,
+            no_underscore_emphasis=sphinx_config.m2r_no_underscore_emphasis,
+            inline_math=sphinx_config.m2r_inline_math,
         )

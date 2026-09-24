@@ -22,33 +22,19 @@ if TYPE_CHECKING:
 __version__ = version("m2r2")
 
 
-class M2R2:
+class BaseM2R2:
     """Convert Markdown documents using configurable RST rendering options."""
 
     def __init__(
         self,
-        plugins: Iterable[str | Plugin] | None = None,
         *,
+        renderer: RestRenderer,
+        plugins: Iterable[str | Plugin] | None = None,
         no_underscore_emphasis: bool = False,
         inline_math: Literal["legacy", "dollar"] | None = "legacy",
-        parse_relative_links: bool = False,
-        anonymous_references: bool = False,
-        use_mermaid: bool = False,
     ) -> None:
-        self.renderer = RestRenderer(
-            parse_relative_links=parse_relative_links,
-            anonymous_references=anonymous_references,
-            use_mermaid=use_mermaid,
-        )
-        self.configure_markdown_parser(plugins, no_underscore_emphasis, inline_math)
+        self.renderer = renderer
 
-    def configure_markdown_parser(
-        self,
-        plugins: Iterable[str | Plugin] | None,
-        no_underscore_emphasis: bool,
-        inline_math: Literal["legacy", "dollar"] | None,
-    ) -> None:
-        """Create the Markdown parser for this converter's renderer."""
         if plugins is None:
             plugins = []
         else:
@@ -65,14 +51,7 @@ class M2R2:
                     before="emphasis",
                 )
 
-        plugins.extend(
-            [
-                custom_rst_directives,
-                table,
-                footnotes,
-                strikethrough,
-            ]
-        )
+        plugins.extend([custom_rst_directives, table, footnotes, strikethrough])
 
         # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=self.renderer, plugins=plugins)
@@ -84,6 +63,32 @@ class M2R2:
 
     def __call__(self, s: str) -> str:
         return self.parse(s)
+
+
+class M2R2(BaseM2R2):
+    """Convert Markdown documents using configurable RST rendering options."""
+
+    def __init__(
+        self,
+        plugins: Iterable[str | Plugin] | None = None,
+        *,
+        no_underscore_emphasis: bool = False,
+        inline_math: Literal["legacy", "dollar"] | None = "legacy",
+        parse_relative_links: bool = False,
+        anonymous_references: bool = False,
+        use_mermaid: bool = False,
+    ) -> None:
+        renderer = RestRenderer(
+            parse_relative_links=parse_relative_links,
+            anonymous_references=anonymous_references,
+            use_mermaid=use_mermaid,
+        )
+        super().__init__(
+            renderer=renderer,
+            plugins=plugins,
+            no_underscore_emphasis=no_underscore_emphasis,
+            inline_math=inline_math,
+        )
 
 
 def convert(
