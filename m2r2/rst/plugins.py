@@ -237,7 +237,10 @@ def configure_markdown_parser_for_rst(
 
     if inline_math == "legacy":
         markdown.inline.register(
-            "inline_math", r"`\$(?P<math>.*?)\$`", parse_inline_math, before="codespan"
+            "inline_math",
+            r"`\$(?P<math>[^`\n]*?)\$`",
+            parse_inline_math,
+            before="codespan",
         )
     elif inline_math == "dollar":
         # Bare dollar delimiters cannot touch whitespace or close before a digit.

@@ -32,6 +32,18 @@ def test_select_inline_math_syntax(mode, source, expected_math, expected_code):
     assert [node.astext() for node in document.findall(nodes.literal)] == expected_code
 
 
+def test_legacy_math_does_not_cross_code_spans():
+    source = r"`$x$` and `$5-$10` and `$20,000 and $30,000` and `\$`"
+    document = parse_converted_markdown(source, "legacy")
+
+    assert [node.astext() for node in document.findall(nodes.math)] == ["x"]
+    assert [node.astext() for node in document.findall(nodes.literal)] == [
+        "$5-$10",
+        "$20,000 and $30,000",
+        r"\$",
+    ]
+
+
 @pytest.mark.parametrize("value", ["none", "unknown", True, False])
 def test_reject_invalid_inline_math_option(value):
     with pytest.raises(ValueError, match="inline_math"):
