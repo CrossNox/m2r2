@@ -52,16 +52,18 @@ def assign_github_heading_slugs(titles: Iterable[str]) -> list[str]:
 
     Append numeric suffixes to resolve collisions with previously assigned slugs.
     """
-    occurrences: dict[str, int] = {}
+    slug_collision_counts: dict[str, int] = {}
     slugs = []
+
     for title in titles:
-        original = slugify_heading_like_github(title)
-        slug = original
-        while slug in occurrences:
-            occurrences[original] += 1
-            slug = f"{original}-{occurrences[original]}"
-        occurrences[slug] = 0
-        slugs.append(slug)
+        base_slug = slugify_heading_like_github(title)
+        unique_slug = base_slug
+        while unique_slug in slug_collision_counts:
+            slug_collision_counts[base_slug] += 1
+            unique_slug = f"{base_slug}-{slug_collision_counts[base_slug]}"
+        slug_collision_counts[unique_slug] = 0
+        slugs.append(unique_slug)
+
     return slugs
 
 
