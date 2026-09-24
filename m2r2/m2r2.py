@@ -48,12 +48,8 @@ class BaseM2R2:
 
         self.renderer = renderer
 
-        if plugins is None:
-            plugins = []
-        else:
-            plugins = list(plugins)
+        plugins = list(plugins) if plugins is not None else []
 
-        # Create custom plugin function that respects options
         def custom_rst_directives(md):
             configure_markdown_parser_for_rst(md, inline_math=inline_math)
             if no_underscore_emphasis:
@@ -66,7 +62,6 @@ class BaseM2R2:
 
         plugins.extend([custom_rst_directives, table, footnotes, strikethrough])
 
-        # Create markdown parser with RST directive support
         self.md = mistune.create_markdown(renderer=self.renderer, plugins=plugins)
 
     def parse(self, s: str) -> str:
