@@ -71,6 +71,8 @@ select = [
   "F",   # pyflakes
   "I",   # isort
   "B",   # flake8-bugbear
+  "C901", # mccabe complexity
+  "D401", # imperative mood in docstrings
   "UP",  # pyupgrade
   "RUF", # ruff-specific
 ]

@@ -182,7 +182,7 @@ def run_m2r2(args: argparse.Namespace) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Main entry point for the CLI.
+    """Run the CLI.
 
     Args:
         argv: Command-line arguments. Defaults to sys.argv[1:].
