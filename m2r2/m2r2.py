@@ -48,7 +48,7 @@ class BaseM2R2:
 
         self.renderer = renderer
 
-        plugins = list(plugins) if plugins is not None else []
+        configured_plugins = list(plugins) if plugins is not None else []
 
         def custom_rst_directives(md):
             configure_markdown_parser_for_rst(md, inline_math=inline_math)
@@ -60,9 +60,13 @@ class BaseM2R2:
                     before="emphasis",
                 )
 
-        plugins.extend([custom_rst_directives, table, footnotes, strikethrough])
+        configured_plugins.extend(
+            [custom_rst_directives, table, footnotes, strikethrough]
+        )
 
-        self.md = mistune.create_markdown(renderer=self.renderer, plugins=plugins)
+        self.md = mistune.create_markdown(
+            renderer=self.renderer, plugins=configured_plugins
+        )
 
     def parse(self, s: str) -> str:
         """Convert one Markdown document to RST."""

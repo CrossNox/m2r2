@@ -351,10 +351,12 @@ class RestRenderer(RSTRenderer):
             )
 
         destination_parts = urlparse(link_destination)
+        points_inside_project = (
+            destination_parts.scheme == "" and destination_parts.netloc == ""
+        )
         if (
             not self.parse_relative_links
-            or destination_parts.scheme != ""
-            or destination_parts.netloc != ""
+            or not points_inside_project
             or destination_parts.path == ""
         ):
             return self.render_hyperlink_reference(
@@ -625,8 +627,8 @@ class RestRenderer(RSTRenderer):
         children = token.get("children", [])
         has_header = any(child["type"] == "table_head" for child in children)
         header_option = "   :header-rows: 1\n\n" if has_header else "\n"
-        body = self.render_children(token, state)
-        return f"\n.. list-table::\n{header_option}{body}\n"
+        rendered_rows = self.render_children(token, state)
+        return f"\n.. list-table::\n{header_option}{rendered_rows}\n"
 
     def table_head(self, token, state):
         """Render table cells as a row in an RST list-table."""
@@ -669,7 +671,6 @@ class RestRenderer(RSTRenderer):
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
         """Assemble the rendered document with its required definitions."""
-        role_definitions = list(markdown_state.env.get("role_definitions", {}).values())
         substitution_definitions = [
             substitution_definition
             for substitution_name, substitution_definition in markdown_state.env.get(
@@ -678,15 +679,15 @@ class RestRenderer(RSTRenderer):
             if substitution_name not in self.existing_substitutions
         ]
 
-        rest_body = remove_redundant_inline_escapes(
+        rest_document = remove_redundant_inline_escapes(
             merge_adjacent_raw_html_roles("\n" + rendered_body.lstrip("\n"))
         )
-
-        parts = []
-        if len(role_definitions) > 0:
-            parts.append("\n\n".join(role_definitions))
         if len(substitution_definitions) > 0:
-            parts.append("\n" + "\n\n".join(substitution_definitions))
+            rest_document = (
+                "\n" + "\n\n".join(substitution_definitions) + "\n\n" + rest_document
+            )
 
-        parts.append(rest_body)
-        return "\n\n".join(parts)
+        role_definitions = list(markdown_state.env.get("role_definitions", {}).values())
+        if len(role_definitions) > 0:
+            rest_document = "\n\n".join(role_definitions) + "\n\n" + rest_document
+        return rest_document
