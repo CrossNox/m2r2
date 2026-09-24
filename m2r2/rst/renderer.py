@@ -28,29 +28,17 @@ class VisibleHtmlTextParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         self.parts.append(data)
 
-    def get_text(self) -> str:
-        """Return the visible text collected from HTML."""
-        return "".join(self.parts)
-
 
 def extract_visible_html_text(fragment: str) -> str:
     """Extract visible text from an HTML fragment."""
     parser = VisibleHtmlTextParser()
     parser.feed(fragment)
     parser.close()
-    return parser.get_text()
+    return "".join(parser.parts)
 
 
 class SubstitutionNameCollision(Exception):
     """Report conflicting substitution definitions with the same name."""
-
-
-# The middle group accepts escaped characters, but stops at line boundaries
-# and inline markup that must still be parsed as RST.
-_RAW_HTML_MERGE_PATTERN = re.compile(
-    rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ "
-    rf"((?:\\[^\n]|[^\\\n`*|])+?)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
-)
 
 
 def record_role_definition(
@@ -112,10 +100,6 @@ def rendering_heading(state: BlockState) -> Iterator[None]:
     state.env["inside_heading"] = False
 
 
-def is_inside_heading(state: BlockState) -> bool:
-    return state.env.get("inside_heading", False)
-
-
 def flatten_to_plain_text(token: dict[str, Any]) -> str:
     """Extract plain text from an inline token and its children."""
     token_type = token["type"]
@@ -164,11 +148,6 @@ def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
     return body
 
 
-def escape_reference_characters(text: str) -> str:
-    """Escape characters that could create nested references inside link text."""
-    return re.sub(r"[:@_]", r"\\\g<0>", text)
-
-
 def escape_role_title(text: str) -> str:
     """Escape characters that would end or alter an RST role's title."""
     return text.replace("\\", "\\\\").replace("`", "\\`")
@@ -195,21 +174,20 @@ def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
 
 def merge_adjacent_raw_html_roles(text: str) -> str:
     """Join raw HTML roles that mistune splits across tokens."""
-    while _RAW_HTML_MERGE_PATTERN.search(text) is not None:
-        text = _RAW_HTML_MERGE_PATTERN.sub(merge_raw_html_match, text)
+    # The middle group accepts escaped characters, but stops at line boundaries
+    # and inline markup that must still be parsed as RST.
+    pattern = re.compile(
+        rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ "
+        rf"((?:\\[^\n]|[^\\\n`*|])+?)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
+    )
+
+    while (match := pattern.search(text)) is not None:
+        plain_text = unescape(escape2null(match[2]))
+        html_text = html.escape(plain_text, quote=False).replace("`", "&#96;")
+        replacement = f":{RAW_HTML_ROLE_NAME}:`{match[1]}{html_text}{match[3]}`"
+        text = text[: match.start()] + replacement + text[match.end() :]
+
     return text
-
-
-def merge_raw_html_match(match: re.Match[str]) -> str:
-    """Move escaped RST text into HTML without changing its visible characters."""
-    plain_text = unescape(escape2null(match[2]))
-    html_text = html.escape(plain_text, quote=False).replace("`", "&#96;")
-    return f":{RAW_HTML_ROLE_NAME}:`{match[1]}{html_text}{match[3]}`"
-
-
-def trim_inline_escapes(text: str) -> str:
-    """Remove unnecessary markup separators from a standalone inline fragment."""
-    return remove_redundant_inline_escapes(text.removeprefix("\\ ").removesuffix("\\ "))
 
 
 def remove_redundant_inline_escapes(text: str) -> str:
@@ -448,7 +426,7 @@ class RestRenderer(RSTRenderer):
 
         Flatten label markup in headings.
         """
-        if is_inside_heading(state):
+        if state.env.get("inside_heading", False):
             # docutils names a section after the text of its title as the title
             # reads when parsed, so a substitution reference there would put its
             # own name in the section id. The anonymous form writes no target,
@@ -478,17 +456,14 @@ class RestRenderer(RSTRenderer):
                 text = self.render_children(token, state)
             else:
                 text = self.render_emphasis(token, state, emphasis_marker)
-        replacement = self.prepare_substitution_text(text)
+        replacement = remove_redundant_inline_escapes(
+            text.removeprefix("\\ ").removesuffix("\\ ")
+        )
+        replacement = merge_adjacent_raw_html_roles(replacement).replace("\n", " ")
         link_substitution_name = define_substitution(
             state, "m2r-link", f"replace:: \\ {replacement}", target_url=url
         )
         return rf"\ |{link_substitution_name}|_\ "
-
-    def prepare_substitution_text(self, text: str) -> str:
-        """Normalize inline text for an RST substitution definition."""
-        return merge_adjacent_raw_html_roles(trim_inline_escapes(text)).replace(
-            "\n", " "
-        )
 
     def heading(self, token, state):
         """Render a heading with an underline sized to its display width."""
@@ -534,7 +509,7 @@ class RestRenderer(RSTRenderer):
         """Escape parsed Markdown text for its RST context."""
         text = token["raw"].replace("\\", "\\\\").replace("|", "\\|")
         if is_inside_link_text(state):
-            return escape_reference_characters(text)
+            return re.sub(r"[:@_]", r"\\\g<0>", text)
         return text
 
     def image(self, token: dict[str, Any], state: BlockState) -> str:

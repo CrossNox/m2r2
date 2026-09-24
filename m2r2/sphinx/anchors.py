@@ -83,14 +83,6 @@ def normalize_target_document_path(
     )
 
 
-def find_source_docname_for_link(
-    env: BuildEnvironment, link_source_path: str | os.PathLike[str]
-) -> str:
-    """Return the link source's Sphinx document name, without its file extension."""
-    source_relative_path = os.path.relpath(link_source_path, env.srcdir)
-    return os.path.splitext(source_relative_path)[0].replace(os.sep, "/")
-
-
 def find_documents_with_changed_anchor_references(
     app: Sphinx, env: BuildEnvironment
 ) -> list[str]:
@@ -174,7 +166,10 @@ def create_document_anchor_reference(
         markdown_source_path = inliner.reporter.get_source_and_line(lineno)[0]
         if markdown_source_path is None:
             raise ValueError("Cannot resolve an anchor link without a source path")
-        link_source_docname = find_source_docname_for_link(env, markdown_source_path)
+        source_relative_path = os.path.relpath(markdown_source_path, env.srcdir)
+        link_source_docname = os.path.splitext(source_relative_path)[0].replace(
+            os.sep, "/"
+        )
     target_docname = normalize_target_document_path(
         link_source_docname, destination_path
     )
