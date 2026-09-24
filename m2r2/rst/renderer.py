@@ -669,6 +669,7 @@ class RestRenderer(RSTRenderer):
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
         """Assemble the rendered document with its required definitions."""
+        role_definitions = list(markdown_state.env.get("role_definitions", {}).values())
         substitution_definitions = [
             substitution_definition
             for substitution_name, substitution_definition in markdown_state.env.get(
@@ -680,14 +681,12 @@ class RestRenderer(RSTRenderer):
         rest_body = remove_redundant_inline_escapes(
             merge_adjacent_raw_html_roles("\n" + rendered_body.lstrip("\n"))
         )
-        if len(substitution_definitions) > 0:
-            rest_document = (
-                "\n" + "\n\n".join(substitution_definitions) + "\n\n" + rest_body
-            )
-        else:
-            rest_document = rest_body
 
-        role_definitions = list(markdown_state.env.get("role_definitions", {}).values())
+        parts = []
         if len(role_definitions) > 0:
-            rest_document = "\n\n".join(role_definitions) + "\n\n" + rest_document
-        return rest_document
+            parts.append("\n\n".join(role_definitions))
+        if len(substitution_definitions) > 0:
+            parts.append("\n" + "\n\n".join(substitution_definitions))
+
+        parts.append(rest_body)
+        return "\n\n".join(parts)
