@@ -5,13 +5,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Change Log &#8212; M2R2 1.1.0 documentation</title>
+    <title>Change Log &#8212; M2R2 2.0.0 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=6351133d" />
-    <script src="_static/documentation_options.js?v=fc837d61"></script>
+    <script src="_static/documentation_options.js?v=51b770b3"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="prev" title="Example" href="example.html" />
@@ -41,6 +42,43 @@
             
   <section id="change-log">
 <h1>Change Log<a class="headerlink" href="#change-log" title="Link to this heading">¶</a></h1>
+<section id="version-2-0-0-2026-09-24">
+<h2>Version 2.0.0 (2026-09-24)<a class="headerlink" href="#version-2-0-0-2026-09-24" title="Link to this heading">¶</a></h2>
+<section id="breaking-changes">
+<h3>Breaking changes<a class="headerlink" href="#breaking-changes" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Replace the Python <code class="docutils literal notranslate"><span class="pre">disable_inline_math</span></code> argument with <code class="docutils literal notranslate"><span class="pre">inline_math</span></code>, accepting <code class="docutils literal notranslate"><span class="pre">&quot;legacy&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;dollar&quot;</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p>Require Mistune 3.2 or newer so footnote rendering shares document definitions.</p></li>
+<li><p>Remove the <code class="docutils literal notranslate"><span class="pre">renderer</span></code> argument from <code class="docutils literal notranslate"><span class="pre">M2R2</span></code>. <code class="docutils literal notranslate"><span class="pre">SphinxM2R2</span></code> constructs a converter from a docutils document for Sphinx integrations.</p></li>
+<li><p>Make <code class="docutils literal notranslate"><span class="pre">RestRenderer</span></code> render only the document body when it is used directly with Mistune. <code class="docutils literal notranslate"><span class="pre">M2R2</span></code> writes the role and substitution definitions for a complete document.</p></li>
+<li><p>Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.</p></li>
+<li><p>Discard Markdown link titles, which RST references cannot represent.</p></li>
+<li><p>Resolve fragment links under Sphinx with the <code class="docutils literal notranslate"><span class="pre">m2r-anchor</span></code> role instead of <code class="docutils literal notranslate"><span class="pre">:ref:</span></code>.</p></li>
+<li><p>Render links in headings with plain text and anonymous references so section ids stay readable.</p></li>
+<li><p>Start absolute <code class="docutils literal notranslate"><span class="pre">mdinclude</span></code> paths at the Sphinx source directory instead of the filesystem root.</p></li>
+</ul>
+</section>
+<section id="fixes-and-additions">
+<h3>Fixes and additions<a class="headerlink" href="#fixes-and-additions" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Resolve relative Markdown image paths from the included file’s directory, including nested includes. Keep image substitutions distinct when different files use the same relative image path.</p></li>
+<li><p>Convert GitHub alerts (<code class="docutils literal notranslate"><span class="pre">[!NOTE]</span></code>, <code class="docutils literal notranslate"><span class="pre">[!TIP]</span></code>, <code class="docutils literal notranslate"><span class="pre">[!IMPORTANT]</span></code>, <code class="docutils literal notranslate"><span class="pre">[!WARNING]</span></code>, and <code class="docutils literal notranslate"><span class="pre">[!CAUTION]</span></code>) into RST admonitions.</p></li>
+<li><p>Add dollar-delimited inline math with <code class="docutils literal notranslate"><span class="pre">inline_math=&quot;dollar&quot;</span></code>, supporting <span class="math notranslate nohighlight">\(...\)</span> and dollar-backtick delimiters. Keep <code class="docutils literal notranslate"><span class="pre">&quot;legacy&quot;</span></code> as the default and use <code class="docutils literal notranslate"><span class="pre">None</span></code> to disable inline math.</p></li>
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">--inline-math</span> <span class="pre">legacy</span></code> and <code class="docutils literal notranslate"><span class="pre">--inline-math</span> <span class="pre">dollar</span></code> to the CLI. Keep <code class="docutils literal notranslate"><span class="pre">--disable-inline-math</span></code> to turn off inline math.</p></li>
+<li><p>Add the Sphinx setting <code class="docutils literal notranslate"><span class="pre">m2r_inline_math</span></code>. Keep <code class="docutils literal notranslate"><span class="pre">m2r_disable_inline_math</span></code> as a deprecated alias with a warning. An explicit new setting takes precedence.</p></li>
+<li><p>Write document definitions after footnotes render, so links and images in footnotes have their definitions.</p></li>
+<li><p>Preserve emphasis around links and inline markup within link text by using substitutions where RST cannot express the nesting directly.</p></li>
+<li><p>Render empty links as empty references and move footnote references out of link text.</p></li>
+<li><p>Prevent references from nesting inside links. Linked images lose their own targets, and plain link text escapes characters that create RST references.</p></li>
+<li><p>Render strikethrough content as HTML and keep its inline Markdown formatting.</p></li>
+<li><p>Preserve backslashes in text.</p></li>
+<li><p>Derive image alt text from plain text.</p></li>
+<li><p>Resolve same-page and cross-page links to Markdown headings by their GitHub anchors. Resolve explicit RST labels before generated heading anchors with the same name.</p></li>
+<li><p>Add <code class="docutils literal notranslate"><span class="pre">start-after</span></code>, <code class="docutils literal notranslate"><span class="pre">end-before</span></code>, <code class="docutils literal notranslate"><span class="pre">lines</span></code>, <code class="docutils literal notranslate"><span class="pre">literal</span></code>, <code class="docutils literal notranslate"><span class="pre">code</span></code>, <code class="docutils literal notranslate"><span class="pre">number-lines</span></code>, <code class="docutils literal notranslate"><span class="pre">name</span></code>, and <code class="docutils literal notranslate"><span class="pre">class</span></code> to <code class="docutils literal notranslate"><span class="pre">mdinclude</span></code>. Reject its <code class="docutils literal notranslate"><span class="pre">parser</span></code> option.</p></li>
+<li><p>Track files read by <code class="docutils literal notranslate"><span class="pre">mdinclude</span></code> so Sphinx rebuilds them when they change.</p></li>
+</ul>
+</section>
+</section>
 <section id="version-1-1-0-2026-09-18">
 <h2>Version 1.1.0 (2026-09-18)<a class="headerlink" href="#version-1-1-0-2026-09-18" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -229,7 +267,7 @@
 <section id="version-0-1-3-2016-06-02">
 <h2>Version 0.1.3 (2016-06-02)<a class="headerlink" href="#version-0-1-3-2016-06-02" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>Remove extra escaped-spaces (’‘)</p>
+<li><p>Remove extra escaped-spaces (’\ ‘)</p>
 <ul>
 <li><p>before and after normal spaces</p></li>
 <li><p>at the beginning of lines</p></li>
