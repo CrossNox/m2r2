@@ -37,14 +37,14 @@ class VisibleHtmlTextParser(HTMLParser):
 
 def slugify_heading_like_github(title: str) -> str:
     """Generate a GitHub-style heading slug without a collision suffix."""
-    kept = "".join(
+    slug_characters = "".join(
         character
         for character in title.lower()
         if character in (" ", "-")
         or unicodedata.category(character).startswith(("L", "M", "N"))
         or unicodedata.category(character) == "Pc"
     )
-    return kept.replace(" ", "-")
+    return slug_characters.replace(" ", "-")
 
 
 def assign_github_heading_slugs(titles: Iterable[str]) -> list[str]:
