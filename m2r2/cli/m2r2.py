@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from m2r2.m2r2 import __version__, convert
 
@@ -18,7 +18,7 @@ def parse_from_file(
     encoding: str = "utf-8",
     *,
     no_underscore_emphasis: bool = False,
-    disable_inline_math: bool = False,
+    inline_math: Literal["legacy", "dollar"] | None = "legacy",
     parse_relative_links: bool = False,
     anonymous_references: bool = False,
     use_mermaid: bool = False,
@@ -29,10 +29,11 @@ def parse_from_file(
         file: Path to the Markdown file.
         encoding: File encoding. Defaults to "utf-8".
         no_underscore_emphasis: Disable underscore-based emphasis.
-        disable_inline_math: Disable inline math parsing.
-        parse_relative_links: Convert relative links to RST references.
-        anonymous_references: Use anonymous RST references.
-        use_mermaid: Render mermaid code blocks as directives.
+        inline_math: Enable inline math with "legacy" or "dollar" syntax, or
+            use None to disable it.
+        parse_relative_links: Convert relative document links to ``:doc:`` roles.
+        anonymous_references: Use anonymous RST references for plain link text.
+        use_mermaid: Render Mermaid code blocks as directives.
 
     Returns:
         The converted reStructuredText content.
@@ -40,14 +41,14 @@ def parse_from_file(
     Raises:
         FileNotFoundError: If the file does not exist.
     """
-    path = Path(file)
-    if not path.exists():
-        raise FileNotFoundError(f"No such file exists: {path}")
+    source_path = Path(file)
+    if not source_path.exists():
+        raise FileNotFoundError(f"No such file exists: {source_path}")
 
     return convert(
-        path.read_text(encoding=encoding),
+        source_path.read_text(encoding=encoding),
         no_underscore_emphasis=no_underscore_emphasis,
-        disable_inline_math=disable_inline_math,
+        inline_math=inline_math,
         parse_relative_links=parse_relative_links,
         anonymous_references=anonymous_references,
         use_mermaid=use_mermaid,
@@ -71,21 +72,23 @@ def save_to_file(
     Returns:
         True if file was written, False if skipped.
     """
-    target = Path(file).with_suffix(".rst")
+    output_path = Path(file).with_suffix(".rst")
 
-    if not overwrite and target.exists():
+    if not overwrite and output_path.exists():
         if not sys.stdin.isatty():
             print(
                 f"Skipping {file} (use --overwrite in non-interactive mode)",
                 file=sys.stderr,
             )
             return False
-        confirm = input(f"{target} already exists. Overwrite it? [y/N]: ").lower()
-        if confirm not in ("y", "yes"):
+        confirmation = input(
+            f"{output_path} already exists. Overwrite it? [y/N]: "
+        ).lower()
+        if confirmation not in ("y", "yes"):
             print(f"Skipping {file}", file=sys.stderr)
             return False
 
-    target.write_text(content, encoding=encoding)
+    output_path.write_text(content, encoding=encoding)
     return True
 
 
@@ -125,14 +128,21 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--parse-relative-links",
         action="store_true",
-        help="convert relative links to :doc: or :ref: directives",
+        help="convert relative document links to :doc: roles",
     )
     parser.add_argument(
         "--anonymous-references",
         action="store_true",
-        help="use anonymous references (__ instead of _)",
+        help="use anonymous references for links with plain text",
     )
-    parser.add_argument(
+    inline_math_options = parser.add_mutually_exclusive_group()
+    inline_math_options.add_argument(
+        "--inline-math",
+        choices=("legacy", "dollar"),
+        default="legacy",
+        help="select inline math syntax (default: legacy)",
+    )
+    inline_math_options.add_argument(
         "--disable-inline-math",
         action="store_true",
         help="disable inline math conversion",
@@ -152,29 +162,29 @@ def run_m2r2(args: argparse.Namespace) -> None:
         args: Parsed command-line arguments.
     """
     # Validate all input files exist before processing any
-    missing = [f for f in args.input_files if not f.exists()]
-    if len(missing) > 0:
-        for f in missing:
-            print(f"Error: No such file exists: {f}", file=sys.stderr)
+    missing_files = [file for file in args.input_files if not file.exists()]
+    if len(missing_files) > 0:
+        for missing_file in missing_files:
+            print(f"Error: No such file exists: {missing_file}", file=sys.stderr)
         sys.exit(1)
 
     for file in args.input_files:
-        output = parse_from_file(
+        converted_text = parse_from_file(
             file,
             no_underscore_emphasis=args.no_underscore_emphasis,
             parse_relative_links=args.parse_relative_links,
             anonymous_references=args.anonymous_references,
-            disable_inline_math=args.disable_inline_math,
+            inline_math=None if args.disable_inline_math else args.inline_math,
             use_mermaid=args.use_mermaid,
         )
         if args.dry_run:
-            print(output)
+            print(converted_text)
         else:
-            save_to_file(file, output, overwrite=args.overwrite)
+            save_to_file(file, converted_text, overwrite=args.overwrite)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Main entry point for the CLI.
+    """Run the CLI.
 
     Args:
         argv: Command-line arguments. Defaults to sys.argv[1:].

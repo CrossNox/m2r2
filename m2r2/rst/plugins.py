@@ -2,28 +2,10 @@ from __future__ import annotations
 
 import re
 from re import Match
-from typing import Any
+from typing import Any, Literal
 
 from mistune import BlockParser
 from mistune.core import BlockState, InlineState
-
-# Multiline directive: starts with .., continues with indented lines
-# Blank lines within indented content are part of the directive
-# The directive ends when we hit a non-indented, non-blank line
-DIRECTIVE_PATTERN = (
-    r"^(?P<directive_multiline>"
-    r" *\.\..*\n"
-    r"(?:"
-    r"(?:[ \t]+.*\n)"
-    r"|"
-    r"(?:[ \t]*\n(?=[ \t\n]*[ \t]))"  # Blank line(s) only if eventually followed by indented line
-    r")*"
-    r"(?:[ \t]*\n(?=[ \t]*$|[ \t]*\n*$))?"  # Trailing blank line only if at end of input
-    r")"
-)
-
-ONELINE_DIRECTIVE_PATTERN = r"^(?P<directive_oneline> *\.\.[^\n]*)$"
-RST_LITERAL_BLOCK_MARKER_PATTERN = r"^(?P<code_block>::\s*)$"
 
 VISUAL_LIST_PATTERN = (
     r"^(?P<visual_list_spaces> *)"
@@ -31,35 +13,44 @@ VISUAL_LIST_PATTERN = (
     r"(?P<visual_list_content>[ \t]*|[ \t].+)$"
 )
 
-REST_ROLE_PATTERN = r":.*?:`.*?`|`[^`]+`:.*?:"
-REST_LINK_PATTERN = r"`[^`]*?`_"
-RST_FOOTNOTE_REF_PATTERN = r"\[[#][^\]]+\]_"
-INLINE_MATH_PATTERN = r"`\$(?P<math>.*?)\$`"
-EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
-LITERAL_UNDERSCORE_PATTERN = r"_+"
+
+def parse_block_quote_with_github_alert(
+    block: BlockParser, match: Match[str], state: BlockState
+) -> int:
+    """Recognize GitHub alerts at the start of top-level block quotes."""
+    alert_match = re.fullmatch(
+        r" {0,4}\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*",
+        match.group("quote_1"),
+    )
+    if state.depth() != 0 or alert_match is None:
+        return block.parse_block_quote(match, state)
+
+    quote_text, end_position = block.extract_block_quote(match, state)
+    alert_state = state.child_state(quote_text.partition("\n")[2])
+    block.parse(alert_state, block.block_quote_rules)
+    alert_token = {
+        "type": "github_alert",
+        "attrs": {"kind": alert_match.group(1).lower()},
+        "children": alert_state.tokens,
+    }
+    if end_position is not None:
+        state.prepend_token(alert_token)
+        return end_position
+    state.append_token(alert_token)
+    return state.cursor
 
 
 def parse_directive(block, match: Match[str], state: BlockState):
     """Preserve an RST directive."""
-    text = match.group("directive_multiline")
     # Use "raw" to bypass Mistune's inline parser.
-    token = {"type": "directive", "raw": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_oneline_directive(block, match: Match[str], state: BlockState):
-    """Preserve a one-line RST directive."""
-    text = match.group("directive_oneline")
-    token = {"type": "directive", "raw": text}
+    token = {"type": "directive", "raw": match.group(0)}
     state.append_token(token)
     return match.end()
 
 
 def parse_rst_literal_block_marker(block, match: Match[str], state: BlockState):
     """Recognize a standalone :: marker introducing an RST literal block."""
-    token = {"type": "rest_code_block", "raw": ""}
-    state.append_token(token)
+    state.append_token({"type": "rest_code_block"})
     return match.end()
 
 
@@ -76,27 +67,10 @@ def parse_autolink(inline, match: Match[str], state: InlineState):
     return match.end()
 
 
-def parse_rest_role(inline, match: Match[str], state: InlineState):
-    """Preserve an RST role without interpreting its contents."""
-    text = match.group(0)
-    token = {"type": "rest_role", "text": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_rest_link(inline, match: Match[str], state: InlineState):
-    """Preserve an RST link."""
-    text = match.group(0)
-    token = {"type": "rest_link", "text": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_rst_footnote_ref(inline, match: Match[str], state: InlineState):
-    """Preserve an RST footnote reference such as [#a]_."""
-    text = match.group(0)
-    token = {"type": "rst_footnote_ref", "text": text}
-    state.append_token(token)
+def parse_rst_inline_token(inline, match: Match[str], state: InlineState):
+    """Preserve an RST inline construct without interpreting its contents."""
+    # Mistune uses the matched outer group as the registered token type.
+    state.append_token({"type": match.lastgroup, "text": match.group(0)})
     return match.end()
 
 
@@ -105,6 +79,16 @@ def parse_inline_math(inline, match: Match[str], state: InlineState):
     math = match.group("math")
     token = {"type": "inline_math", "math": math}
     state.append_token(token)
+    return match.end()
+
+
+def parse_dollar_inline_math(inline, match: Match[str], state: InlineState):
+    """Preserve LaTeX within dollar or dollar-backtick delimiters."""
+    quoted_math = match.group("quoted_math")
+    math = match.group("math") if quoted_math is None else quoted_math.strip()
+    if math == "":
+        return None
+    state.append_token({"type": "inline_math", "math": math})
     return match.end()
 
 
@@ -134,7 +118,7 @@ def parse_list_with_visual_indentation(
     block_interrupt_pattern = block.compile_sc(
         [
             "fenced_code",
-            "atx_heading" if "atx_heading" in block.specification else "axt_heading",
+            "atx_heading",
             "thematic_break",
             "block_quote",
             "list",
@@ -209,50 +193,91 @@ def parse_list_with_visual_indentation(
     return state.cursor
 
 
-def configure_markdown_parser_for_rst(markdown):
+def configure_markdown_parser_for_rst(
+    markdown, *, inline_math: Literal["legacy", "dollar"] | None = "legacy"
+):
     """Configure Markdown parsing for conversion to reStructuredText."""
     markdown.block.register(
         "list", VISUAL_LIST_PATTERN, parse_list_with_visual_indentation
     )
+    markdown.block.register("block_quote", None, parse_block_quote_with_github_alert)
     markdown.inline.register("auto_link", None, parse_autolink)
     markdown.inline.register("auto_email", None, parse_autolink)
 
-    # Register directive parsers before indent_code so indented directives are recognized
+    # Multiline directives include indented content and blank lines within it.
+    # A trailing blank line is included only at the end of input.
     markdown.block.register(
-        "directive", DIRECTIVE_PATTERN, parse_directive, before="indent_code"
+        "directive",
+        (
+            r"^(?P<directive_multiline>"
+            r" *\.\..*\n"
+            r"(?:"
+            r"(?:[ \t]+.*\n)"
+            r"|"
+            r"(?:[ \t]*\n(?=[ \t\n]*[ \t]))"
+            r")*"
+            r"(?:[ \t]*\n(?=[ \t]*$|[ \t]*\n*$))?"
+            r")"
+        ),
+        parse_directive,
+        before="indent_code",
     )
     markdown.block.register(
         "oneline_directive",
-        ONELINE_DIRECTIVE_PATTERN,
-        parse_oneline_directive,
+        r"^(?P<directive_oneline> *\.\.[^\n]*)$",
+        parse_directive,
         before="indent_code",
     )
     markdown.block.register(
         "rest_code_block",
-        RST_LITERAL_BLOCK_MARKER_PATTERN,
+        r"^(?P<code_block>::\s*)$",
         parse_rst_literal_block_marker,
         before="paragraph",
     )
 
-    # Recognize backtick-delimited math and RST syntax before Markdown code spans.
+    if inline_math == "legacy":
+        markdown.inline.register(
+            "inline_math",
+            r"`\$(?P<math>[^`\n]*?)\$`",
+            parse_inline_math,
+            before="codespan",
+        )
+    elif inline_math == "dollar":
+        # Bare dollar delimiters cannot touch whitespace or close before a digit.
+        # Escapes stay inside the expression, and double dollars are excluded.
+        markdown.inline.register(
+            "inline_math",
+            (
+                r"(?<!\$)\$(?!\$)(?:"
+                r"`(?P<quoted_math>(?:\\[^\n]|[^\\`\n])+?)`\$(?!\$)"
+                r"|(?![\s`])(?P<math>(?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])"
+                r")"
+            ),
+            parse_dollar_inline_math,
+            before="codespan",
+        )
+    elif "inline_math" in markdown.inline.rules:
+        markdown.inline.rules.remove("inline_math")
+
+    # Recognize RST syntax before Markdown code spans.
     markdown.inline.register(
-        "inline_math", INLINE_MATH_PATTERN, parse_inline_math, before="codespan"
+        "rest_role",
+        r":.*?:`.*?`|`[^`]+`:.*?:",
+        parse_rst_inline_token,
+        before="codespan",
     )
     markdown.inline.register(
-        "rest_role", REST_ROLE_PATTERN, parse_rest_role, before="codespan"
-    )
-    markdown.inline.register(
-        "rest_link", REST_LINK_PATTERN, parse_rest_link, before="codespan"
+        "rest_link", r"`[^`]*?`_", parse_rst_inline_token, before="codespan"
     )
     markdown.inline.register(
         "rst_footnote_ref",
-        RST_FOOTNOTE_REF_PATTERN,
-        parse_rst_footnote_ref,
+        r"\[[#][^\]]+\]_",
+        parse_rst_inline_token,
         before="codespan",
     )
     markdown.inline.register(
         "eol_literal_marker",
-        EOL_LITERAL_MARKER_PATTERN,
+        r"(?P<spaces>\s+)?::\s*$",
         parse_eol_literal_marker,
         before="text",
     )

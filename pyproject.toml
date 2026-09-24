@@ -1,6 +1,6 @@
 [project]
 name = "m2r2"
-version = "1.1.0"
+version = "2.0.0"
 description = "Markdown to RST converter."
 readme = "README.md"
 license = "MIT"
@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Text Processing :: Markup :: Markdown",
   "Topic :: Text Processing :: Markup :: reStructuredText",
 ]
-dependencies = ["mistune>=3.0,<3.3", "docutils>=0.19"]
+dependencies = ["mistune>=3.2,<3.3", "docutils>=0.19"]
 
 [project.optional-dependencies]
 sphinx = ["sphinx>=1.7.0"]
@@ -71,6 +71,8 @@ select = [
   "F",   # pyflakes
   "I",   # isort
   "B",   # flake8-bugbear
+  "C901", # mccabe complexity
+  "D401", # imperative mood in docstrings
   "UP",  # pyupgrade
   "RUF", # ruff-specific
 ]
@@ -81,6 +83,12 @@ ignore = [
 [tool.mypy]
 python_version = "3.9"
 check_untyped_defs = true
+
+# Recent Sphinx releases use syntax newer than the Python version checked here,
+# so mypy treats Sphinx's types as Any instead of parsing its source.
+[[tool.mypy.overrides]]
+module = ["sphinx", "sphinx.*"]
+follow_imports = "skip"
 
 [tool.coverage.run]
 source = ["m2r2"]

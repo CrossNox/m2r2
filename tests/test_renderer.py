@@ -1,13 +1,20 @@
 from unittest import TestCase, skip
+from unittest.mock import patch
 
-from docutils import io
+from docutils import io, nodes
 from docutils.core import Publisher
 from docutils.parsers.rst import Parser as RstParser
 from docutils.readers.standalone import Reader
 from docutils.writers.pseudoxml import Writer
+from mistune.core import BlockState
 
 from m2r2 import M2R2, convert
-from m2r2.m2r2 import PROLOG
+from m2r2.rst import renderer as renderer_module
+from m2r2.rst.renderer import (
+    RAW_HTML_ROLE_DEFINITION,
+    SubstitutionNameCollision,
+    define_substitution,
+)
 
 
 class RendererTestBase(TestCase):
@@ -19,6 +26,29 @@ class RendererTestBase(TestCase):
     def conv_no_check(self, src, **kwargs):
         out = convert(src, **kwargs)
         return out
+
+    def convert_markdown_to_document(self, src, **kwargs):
+        """Convert Markdown and return the document docutils parses from it."""
+        _, pub = self.check_rst(convert(src, **kwargs))
+        return pub.document
+
+    def find_only_reference(self, src, **kwargs):
+        """Convert Markdown and return the one reference in the result."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(len(references), 1)
+        return references[0]
+
+    def find_section_ids(self, src, **kwargs):
+        """Convert Markdown and return the ids docutils gives its sections."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        sections = [section["ids"] for section in document.findall(nodes.section)]
+        return sections or [document["ids"]]
+
+    def find_first_paragraph_children(self, src, **kwargs):
+        """Convert Markdown and return the nodes of its first paragraph."""
+        document = self.convert_markdown_to_document(src, **kwargs)
+        return next(document.findall(nodes.paragraph)).children
 
     def check_rst(self, rst):
         pub = Publisher(
@@ -90,7 +120,8 @@ b
         out = self.conv(src)
         self.assertEqual(
             out,
-            PROLOG
+            RAW_HTML_ROLE_DEFINITION
+            + "\n\n"
             + """
 abc def\\ :raw-html-m2r:`<br>`
 ghi"""
@@ -109,8 +140,14 @@ class TestInlineMarkdown(RendererTestBase):
 
     def test_multiline_emphasis_with_link(self):
         src = "*first\nsecond [link](page) third\nfourth*"
-        expected = "\n*first\nsecond* `link <page>`_ *third\nfourth*\n"
-        self.assertEqual(self.conv(src), expected)
+        out = self.conv(src)
+        self.assertIn("*first\nsecond* ", out)
+        self.assertIn(" *third\nfourth*", out)
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_multiline_strong_with_code(self):
         src = "**first\nsecond `code` third\nfourth**"
@@ -220,9 +257,59 @@ See `https://example.com`_.
         )
 
     def test_strikethrough(self):
-        src = "~~a~~"
-        out = self.conv(src)
-        self.assertIn(":raw-html-m2r:`<del>a</del>`", out)
+        document = self.convert_markdown_to_document("~~a~~")
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(
+            [node.astext() for node in paragraph.findall(nodes.raw)],
+            ["<del>", "</del>"],
+        )
+        self.assertIn("a", paragraph.astext())
+
+    def test_strikethrough_renders_its_markup_as_html(self):
+        document = self.convert_markdown_to_document(
+            "~~a `b` **c** [d](https://e.com)~~"
+        )
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(
+            [node.astext() for node in paragraph.findall(nodes.raw)],
+            ["<del>", "</del>"],
+        )
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.literal)], ["b"]
+        )
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.strong)], ["c"]
+        )
+        self.assertEqual(
+            [node["refuri"] for node in document.findall(nodes.reference)],
+            ["https://e.com"],
+        )
+
+    def test_strikethrough_preserves_math_and_urls(self):
+        document = self.convert_markdown_to_document("~~`$x$` at https://e.com~~")
+        self.assertEqual(
+            [node.astext() for node in document.findall(nodes.math)], ["x"]
+        )
+        self.assertEqual(
+            [node["refuri"] for node in document.findall(nodes.reference)],
+            ["https://e.com"],
+        )
+
+    def test_strikethrough_puts_footnote_references_after_it(self):
+        document = self.convert_markdown_to_document("~~a[^1]~~ b\n\n[^1]: note")
+        paragraph = next(document.findall(nodes.paragraph))
+        children = paragraph.children
+        closing_index = next(
+            index
+            for index, child in enumerate(children)
+            if isinstance(child, nodes.raw) and child.astext() == "</del>"
+        )
+        footnote_index = next(
+            index
+            for index, child in enumerate(children)
+            if isinstance(child, nodes.footnote_reference)
+        )
+        self.assertLess(closing_index, footnote_index)
 
     def test_emphasis(self):
         src = "*a*"
@@ -282,9 +369,10 @@ See `https://example.com`_.
         self.assertEqual(out, "\nthis is a `link <http://example.com/>`__.\n")
 
     def test_anchor(self):
+        """Outside Sphinx nothing resolves a heading anchor, so it stays an href."""
         src = "this is an [anchor](#anchor)."
         out = self.conv_no_check(src, parse_relative_links=True)
-        self.assertEqual(out, "\nthis is an :ref:`anchor <anchor>`.\n")
+        self.assertEqual(out, "\nthis is an `anchor <#anchor>`_.\n")
 
     def test_relative_link(self):
         src = "this is a [relative link](a_file.md)."
@@ -297,19 +385,18 @@ See `https://example.com`_.
         out = self.conv_no_check(src, parse_relative_links=True)
         self.assertEqual(out, "\nthis is a :doc:`relative link <a_file>`.\n")
 
-    def test_link_title(self):
+    def test_link_title_is_dropped(self):
+        """A title would need raw HTML, which no other builder reads."""
         src = 'this is a [link](http://example.com/ "example").'
         out = self.conv(src)
-        self.assertEqual(
-            out,
-            """\
-.. role:: raw-html-m2r(raw)
-   :format: html
+        self.assertEqual(out, "\nthis is a `link <http://example.com/>`_.\n")
 
-
-this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`.
-""",
+    def test_link_title_with_markup_keeps_the_markup(self):
+        reference = self.find_only_reference(
+            'this is a [**link**](http://example.com/ "example").'
         )
+        self.assertEqual(reference["refuri"], "http://example.com/")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_image_link(self):
         src = "[![Alt Text](image_target_url)](link_target_url)"
@@ -400,13 +487,16 @@ this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`
 
     def test_disable_inline_math(self):
         src = "this is `$E = mc^2$` inline math."
-        out = self.conv(src, disable_inline_math=True)
+        out = self.conv(src, inline_math=None)
         self.assertEqual(out, "\nthis is ``$E = mc^2$`` inline math.\n")
 
     def test_inline_html(self):
         src = "this is <s>html</s>."
         out = self.conv(src)
-        self.assertEqual(out, PROLOG + "\nthis is :raw-html-m2r:`<s>html</s>`.\n")
+        self.assertEqual(
+            out,
+            RAW_HTML_ROLE_DEFINITION + "\n\n\nthis is :raw-html-m2r:`<s>html</s>`.\n",
+        )
 
     def test_inline_html_with_colon(self):
         """Inline HTML containing colons must be properly merged."""
@@ -434,6 +524,67 @@ this is a :raw-html-m2r:`<a href="http://example.com/" title="example">link</a>`
         )
 
 
+class TestTextEscaping(RendererTestBase):
+    """Text reaches the reader with the characters the Markdown holds."""
+
+    def test_backslash_in_strong(self):
+        document = self.convert_markdown_to_document("**C:\\\\**")
+        self.assertEqual(next(document.findall(nodes.strong)).astext(), "C:\\")
+
+    def test_backslash_before_a_space(self):
+        document = self.convert_markdown_to_document("see C:\\\\ now")
+        paragraph = next(document.findall(nodes.paragraph))
+        self.assertEqual(paragraph.astext(), "see C:\\ now")
+
+    def test_backslash_in_link_text(self):
+        reference = self.find_only_reference("**[C:\\\\](https://e.com)**")
+        self.assertEqual(reference.astext(), "C:\\")
+
+    def test_image_alt_keeps_backslash_pipe_and_code(self):
+        document = self.convert_markdown_to_document(
+            "see ![a \\\\ b | `c`](x.png) here"
+        )
+        image = next(document.findall(nodes.image))
+        self.assertEqual(image["alt"], "a \\ b | c")
+
+    def test_image_alt_keeps_inline_math_and_rst_role_text(self):
+        document = self.convert_markdown_to_document(
+            "![a `$x$` :code:`y` b](image.png)"
+        )
+        image = next(document.findall(nodes.image))
+        self.assertEqual(image["alt"], "a x y b")
+
+    def test_image_alt_preserves_comparisons_in_roles(self):
+        for role, expected in (
+            (":code:`x < y`", "x < y"),
+            (":code:`x < y>`", "x < y>"),
+            ("`x < y`:code:", "x < y"),
+            (":math:`x < y>`", "x < y>"),
+            (":custom:`x < y>`", "x < y>"),
+        ):
+            with self.subTest(role=role):
+                document = self.convert_markdown_to_document(
+                    f"![a {role} b](image.png)"
+                )
+                image = next(document.findall(nodes.image))
+                self.assertEqual(image["alt"], f"a {expected} b")
+
+    def test_image_alt_removes_explicit_reference_targets(self):
+        for reference in (
+            "`label <https://example.org>`_",
+            ":ref:`label <target>`",
+            "`label <target>`:doc:",
+            ":py:func:`label <target>`",
+        ):
+            with self.subTest(reference=reference):
+                document = self.convert_markdown_to_document(
+                    f"![a {reference} b](image.png)"
+                )
+                self.assertEqual(
+                    next(document.findall(nodes.image))["alt"], "a label b"
+                )
+
+
 class TestNoUnderscoreEmphasis(RendererTestBase):
     """Regression tests for no_underscore_emphasis with asterisks."""
 
@@ -449,23 +600,47 @@ class TestNoUnderscoreEmphasis(RendererTestBase):
 
     def test_nested_emphasis(self):
         src = "*a [link](page) and `code`* _plain_"
-        expected = "\n*a* `link <page>`_ *and* ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("*a* ", out)
+        self.assertIn(" *and* ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_nested_strong(self):
         src = "**a [link](page) and `code`** _plain_"
-        expected = "\n**a** `link <page>`_ **and** ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("**a** ", out)
+        self.assertIn(" **and** ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_nested_emphasis_after_text(self):
         src = "prefix *a [link](page) and `code`* _plain_"
-        expected = "\nprefix *a* `link <page>`_ *and* ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("prefix *a* ", out)
+        self.assertIn(" *and* ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
 
     def test_nested_strong_after_text(self):
         src = "prefix **a [link](page) and `code`** _plain_"
-        expected = "\nprefix **a** `link <page>`_ **and** ``code`` _plain_\n"
-        self.assertEqual(self.conv(src, no_underscore_emphasis=True), expected)
+        out = self.conv(src, no_underscore_emphasis=True)
+        self.assertIn("prefix **a** ", out)
+        self.assertIn(" **and** ``code`` _plain_", out)
+
+        reference = self.find_only_reference(src, no_underscore_emphasis=True)
+        self.assertEqual(reference["refuri"], "page")
+        self.assertEqual(reference.astext(), "link")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
 
     def test_asterisk_emphasis(self):
         src = "*hello*"
@@ -493,6 +668,230 @@ class TestNoUnderscoreEmphasis(RendererTestBase):
         self.assertIn("*emphasis*", out)
         self.assertIn("_underscored_", out)
         self.assertNotIn("*underscored*", out)
+
+
+class TestLinkWithInlineMarkup(RendererTestBase):
+    """Links keep the emphasis around them and the markup in their text."""
+
+    def test_strong_link_definition(self):
+        """Regression test for issue #36. The one test that pins a name."""
+        src = "our **[end to end](https://example.com)** example"
+        expected = """
+.. |m2r-link-fc8682c5ec06| replace:: \\ **end to end**
+.. _m2r-link-fc8682c5ec06: https://example.com
+
+
+our |m2r-link-fc8682c5ec06|_ example
+"""
+        self.assertEqual(self.conv(src), expected)
+
+    def test_strong_link(self):
+        reference = self.find_only_reference(
+            "our **[end to end](https://example.com)** example"
+        )
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
+
+    def test_emphasized_link(self):
+        reference = self.find_only_reference(
+            "our *[end to end](https://example.com)* example"
+        )
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
+
+    def test_emphasis_splits_around_the_link(self):
+        out = self.conv("**see [docs](https://example.com) here**")
+        self.assertIn("**see** ", out)
+        self.assertIn(" **here**", out)
+
+        reference = self.find_only_reference("**see [docs](https://example.com) here**")
+        self.assertEqual(reference.astext(), "docs")
+
+    def test_link_with_strong_text(self):
+        reference = self.find_only_reference("[**end to end**](https://example.com)")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 1)
+
+    def test_link_with_code_text(self):
+        reference = self.find_only_reference(
+            "call [`run()`](https://example.com) first"
+        )
+        self.assertEqual(reference.astext(), "run()")
+        self.assertEqual(len(list(reference.findall(nodes.literal))), 1)
+
+    def test_link_with_partially_emphasized_text(self):
+        reference = self.find_only_reference("[*end* to end](https://example.com)")
+        self.assertEqual(reference.astext(), "end to end")
+        self.assertEqual(len(list(reference.findall(nodes.emphasis))), 1)
+
+    def test_rst_footnote_reference_follows_link(self):
+        document = self.convert_markdown_to_document(
+            "[text [#note]_](https://example.org)\n\n.. [#note] Note."
+        )
+        links = [
+            reference
+            for reference in document.findall(nodes.reference)
+            if reference.get("refuri") == "https://example.org"
+        ]
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].astext(), "text")
+        self.assertEqual(len(list(document.findall(nodes.footnote_reference))), 1)
+        self.assertEqual(list(links[0].findall(nodes.footnote_reference)), [])
+
+    def test_nested_rst_footnote_reference_follows_link(self):
+        document = self.convert_markdown_to_document(
+            "[**text [#note]_**](https://example.org)\n\n.. [#note] Note."
+        )
+        links = [
+            reference
+            for reference in document.findall(nodes.reference)
+            if reference.get("refuri") == "https://example.org"
+        ]
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].astext(), "text")
+        self.assertEqual(len(list(links[0].findall(nodes.strong))), 1)
+        self.assertEqual(len(list(document.findall(nodes.footnote_reference))), 1)
+
+    def test_html_inside_link_is_one_raw_node(self):
+        reference = self.find_only_reference("[<b>bold</b>](https://example.org)")
+        raw_nodes = list(reference.findall(nodes.raw))
+        self.assertEqual(len(raw_nodes), 1)
+        self.assertEqual(raw_nodes[0].astext(), "<b>bold</b>")
+
+    def test_html_inside_link_keeps_escaped_text_in_one_raw_node(self):
+        for tag in ("b", "span class='red'"):
+            for text in ("my_name", "me@example.org", "10:30", r"C:\name", "a | b"):
+                with self.subTest(tag=tag, text=text):
+                    fragment = f"<{tag}>{text}</{tag.split()[0]}>"
+                    reference = self.find_only_reference(
+                        f"[{fragment}](https://example.org)"
+                    )
+                    raw_nodes = list(reference.findall(nodes.raw))
+                    self.assertEqual(len(raw_nodes), 1)
+                    self.assertEqual(raw_nodes[0].astext(), fragment)
+
+    def test_anonymous_references_do_not_change_the_definition(self):
+        src = "our **[end to end](https://example.com)** example"
+        self.assertEqual(self.conv(src, anonymous_references=True), self.conv(src))
+
+    def test_repeated_link_is_defined_once(self):
+        src = "**[a](https://example.com)** and **[a](https://example.com)**"
+        out = self.conv(src)
+        self.assertEqual(out.count("replace::"), 1)
+
+        document = self.convert_markdown_to_document(src)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(
+            [reference["refuri"] for reference in references],
+            ["https://example.com", "https://example.com"],
+        )
+
+    def test_same_text_with_different_urls(self):
+        document = self.convert_markdown_to_document(
+            "**[a](https://example.com/1)** and **[a](https://example.com/2)**"
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in document.findall(nodes.reference)],
+            ["https://example.com/1", "https://example.com/2"],
+        )
+
+    def test_empty_link_text(self):
+        """An empty link renders as an empty, invisible reference."""
+        reference = self.find_only_reference("see [](https://example.com) here")
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "")
+
+    def test_whitespace_link_text(self):
+        reference = self.find_only_reference("see [ ](https://example.com) here")
+        self.assertEqual(reference.astext(), "")
+
+    def test_emphasized_empty_link_text(self):
+        reference = self.find_only_reference("see **[](https://example.com)** here")
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "")
+
+    def test_two_empty_links(self):
+        document = self.convert_markdown_to_document(
+            "[](https://example.com/1) and [](https://example.com/2)"
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in document.findall(nodes.reference)],
+            ["https://example.com/1", "https://example.com/2"],
+        )
+
+    def assert_link_then_footnote(self, src, link_text):
+        children = self.find_first_paragraph_children(src)
+        reference = next(
+            child for child in children if isinstance(child, nodes.reference)
+        )
+        footnote = next(
+            child for child in children if isinstance(child, nodes.footnote_reference)
+        )
+        self.assertEqual(reference.astext(), link_text)
+        self.assertLess(children.index(reference), children.index(footnote))
+
+    def test_footnote_in_link_text(self):
+        self.assert_link_then_footnote(
+            "see [a[^1]](https://example.com) now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_in_emphasized_link_text(self):
+        self.assert_link_then_footnote(
+            "see **[a[^1]](https://example.com)** now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_nested_in_link_text(self):
+        self.assert_link_then_footnote(
+            "see [**a[^1]**](https://example.com) now\n\n[^1]: note", "a"
+        )
+
+    def test_footnote_in_the_middle_of_link_text(self):
+        self.assert_link_then_footnote(
+            "see [the spec[^1] draft](https://example.com) now\n\n[^1]: note",
+            "the spec draft",
+        )
+
+    def test_image_in_link_text_has_no_target_of_its_own(self):
+        src = "[![logo](https://example.com/logo.png) Project](https://example.com)"
+        out = self.conv(src)
+        self.assertNotIn(":target:", out)
+
+        document = self.convert_markdown_to_document(src)
+        references = list(document.findall(nodes.reference))
+        self.assertEqual(len(references), 1)
+        self.assertEqual(references[0]["refuri"], "https://example.com")
+        self.assertEqual(len(list(references[0].findall(nodes.image))), 1)
+
+    def test_url_in_link_text_stays_text(self):
+        reference = self.find_only_reference(
+            "[`m2r2` at https://pypi.org/project/m2r2](https://example.com)"
+        )
+        self.assertEqual(reference["refuri"], "https://example.com")
+        self.assertEqual(reference.astext(), "m2r2 at https://pypi.org/project/m2r2")
+
+    def test_email_in_link_text_stays_text(self):
+        reference = self.find_only_reference(
+            "[`m2r2` by dev@example.com](https://example.com)"
+        )
+        self.assertEqual(reference.astext(), "m2r2 by dev@example.com")
+
+    def test_reference_like_word_in_link_text_stays_text(self):
+        reference = self.find_only_reference("[`m2r2` foo_](https://example.com)")
+        self.assertEqual(reference.astext(), "m2r2 foo_")
+
+    def test_text_starting_like_a_block_marker(self):
+        """The escaped space opening a replacement keeps docutils reading text."""
+        for link_text, expected in (
+            ("1. Install `m2r2`", "1. Install m2r2"),
+            ("- `flag`", "- flag"),
+            (":f: `x`", ":f: x"),
+        ):
+            with self.subTest(link_text=link_text):
+                reference = self.find_only_reference(
+                    f"see [{link_text}](https://example.com) now"
+                )
+                self.assertEqual(reference.astext(), expected)
 
 
 class TestBlockQuote(RendererTestBase):
@@ -795,17 +1194,17 @@ before ![A](a.png) after
 * before ![A](a.png) after
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
 
-|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
-================================================================================
+|m2r-image-d79de0460ffb|
+============================
 
-before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+before |m2r-image-d79de0460ffb| after
 
-* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+* before |m2r-image-d79de0460ffb| after
 """
         self.assertEqual(self.conv(source), expected)
 
@@ -818,17 +1217,17 @@ before [![A](a.png)](page.html) after
 * before [![A](a.png)](page.html) after
 """
         expected = """
-.. |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| image:: a.png
+.. |m2r-image-ed8a5249f9ad| image:: a.png
    :target: page.html
    :alt: A
 
 
-|m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed|
-================================================================================
+|m2r-image-ed8a5249f9ad|
+============================
 
-before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+before |m2r-image-ed8a5249f9ad| after
 
-* before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8ed| after
+* before |m2r-image-ed8a5249f9ad| after
 """
         self.assertEqual(self.conv(source), expected)
 
@@ -845,6 +1244,10 @@ before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8
 """,
         )
 
+    def test_image_alt_text_ignores_html_tags(self):
+        out = self.conv('![<span title="a>b">alt</span> text](a.png)')
+        self.assertIn(":alt: alt text", out)
+
     def test_image_title(self):
         src = '![alt text](a.png "title")'
         out = self.conv(src)
@@ -858,6 +1261,67 @@ before |m2r-image-ed8a5249f9ad19b20ee01ce38776d98f869cdc5200888bce5bc2d9985510d8
 
 """,
         )
+
+
+class TestRelativeLinkRoles(RendererTestBase):
+    """Sphinx roles read plain text, so markup in the link text is flattened."""
+
+    def test_document_link_with_code_text(self):
+        out = self.conv_no_check(
+            "see [`run()`](other.md) now", parse_relative_links=True
+        )
+        self.assertIn(":doc:`run() <other>`", out)
+
+    def test_document_link_keeps_comparisons_in_role_text(self):
+        out = self.conv_no_check(
+            "[a :code:`x < y` b](other.md)", parse_relative_links=True
+        )
+        self.assertIn(":doc:`a x < y b <other>`", out)
+
+    def test_anchor_link_with_code_text(self):
+        reference = self.find_only_reference(
+            "see [`run()`](#section) now", parse_relative_links=True
+        )
+        self.assertEqual(reference["refuri"], "#section")
+        self.assertEqual(reference.astext(), "run()")
+
+    def test_document_link_inside_emphasis(self):
+        out = self.conv_no_check(
+            "see **[other page](other.md)** now", parse_relative_links=True
+        )
+        self.assertIn(":doc:`other page <other>`", out)
+
+
+class TestHeadingLinks(RendererTestBase):
+    """A link in a heading keeps the section id readable."""
+
+    def test_emphasized_link_in_heading(self):
+        src = "# Install **[pkg](https://e.com)** guide\n\ntext\n"
+        self.assertEqual(self.find_section_ids(src), [["install-pkg-guide"]])
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference["refuri"], "https://e.com")
+        self.assertEqual(reference.astext(), "pkg")
+        self.assertEqual(len(list(reference.findall(nodes.strong))), 0)
+
+    def test_code_link_as_whole_heading(self):
+        src = "# [`run()`](https://e.com)\n\ntext\n"
+        self.assertEqual(self.find_section_ids(src), [["run"]])
+
+        reference = self.find_only_reference(src)
+        self.assertEqual(reference.astext(), "run()")
+
+    def test_heading_link_keeps_comparisons_in_role_text(self):
+        reference = self.find_only_reference(
+            "# [a :math:`x < y` b](https://example.org)\n"
+        )
+        self.assertEqual(reference.astext(), "a x < y b")
+        self.assertEqual(reference["refuri"], "https://example.org")
+
+    def test_emphasis_without_a_link_survives(self):
+        src = "# **bold** title\n\ntext\n"
+        document = self.convert_markdown_to_document(src)
+        self.assertEqual(len(list(document.findall(nodes.strong))), 1)
 
 
 class TestHeading(RendererTestBase):
@@ -1310,11 +1774,11 @@ class TestTable(RendererTestBase):
 | ![A](a.png) | ![B](b.png) |
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
+.. |m2r-image-bf1518c47185| image:: b.png
    :target: b.png
    :alt: B
 
@@ -1324,8 +1788,8 @@ class TestTable(RendererTestBase):
 
    * - A
      - B
-   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
+   * - |m2r-image-d79de0460ffb|\\
+     - |m2r-image-bf1518c47185|\\
 
 """
         self.assertEqual(self.conv(source), expected)
@@ -1336,26 +1800,16 @@ class TestTable(RendererTestBase):
 |---|---|
 | before ![A](a.png) after | ![B](b.png) |
 """
-        expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
-   :target: a.png
-   :alt: A
-
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        rows = list(table.findall(nodes.row))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([entry.astext() for entry in rows[0].children], ["A", "B"])
+        self.assertEqual(rows[1].children[0].astext(), "before A after")
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in table.findall(nodes.image)],
+            [("a.png", "A"), ("b.png", "B")],
+        )
 
     def test_issue_75_table_linked_image(self):
         source = """\
@@ -1363,26 +1817,17 @@ class TestTable(RendererTestBase):
 |---|---|
 | [![A](a.png)](https://example.com) | ![B](b.png) |
 """
-        expected = """
-.. |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016| image:: a.png
-   :target: https://example.com
-   :alt: A
-
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - |m2r-image-486be93246348dc82e02a910d343c83464a6469569cc19e8098719a2d93f9016|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        images = list(table.findall(nodes.image))
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in images],
+            [("a.png", "A"), ("b.png", "B")],
+        )
+        self.assertEqual(
+            [reference["refuri"] for reference in table.findall(nodes.reference)],
+            ["https://example.com", "b.png"],
+        )
 
     def test_issue_75_table_reference_image(self):
         source = """\
@@ -1392,26 +1837,13 @@ class TestTable(RendererTestBase):
 
 [img]: a.png
 """
-        expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
-   :target: a.png
-   :alt: A
-
-.. |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0| image:: b.png
-   :target: b.png
-   :alt: B
-
-
-.. list-table::
-   :header-rows: 1
-
-   * - A
-     - B
-   * - |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|\\
-     - |m2r-image-bf1518c471859b05778affe29630c3ac0d5ccaca3c88d107e5df2e98c8224bc0|\\
-
-"""
-        self.assertEqual(self.conv(source), expected)
+        document = self.convert_markdown_to_document(source)
+        table = next(document.findall(nodes.table))
+        images = list(table.findall(nodes.image))
+        self.assertEqual(
+            [(image["uri"], image["alt"]) for image in images],
+            [("a.png", "A"), ("b.png", "B")],
+        )
 
     def test_table(self):
         src = """\
@@ -1439,6 +1871,14 @@ h1 | h2 | h3
 
 
 class TestFootNote(RendererTestBase):
+    def test_footnote_reference_in_image_alt_text(self):
+        document = self.convert_markdown_to_document(
+            "![note[^a]](image.png)\n\n[^a]: note"
+        )
+        images = list(document.findall(nodes.image))
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0]["alt"], "note[a]")
+
     def test_footnote(self):
         src = """\
 This is a[^1] footnote[^2] ref[^ref] with rst [#a]_.
@@ -1477,6 +1917,30 @@ This is a sphinx [ref]_ global ref.
 .. [ref] ref text"""
         out = self.conv(src)
         self.assertEqual(out, "\n" + src)
+
+    def test_image_in_footnote_is_defined(self):
+        """Mistune renders footnotes in a second pass that shares the definitions."""
+        src = """\
+text[^1]
+
+[^1]: see ![i](https://example.com/i.png)"""
+        out = self.conv(src)
+        name = "m2r-image-4117ba719ca0"
+        self.assertEqual(out.count(f".. |{name}| image::"), 1)
+        self.assertLess(out.index(f".. |{name}| image::"), out.index("text\\ [#fn-1]_"))
+
+    def test_html_only_in_footnote_has_role_definition(self):
+        src = "text[^1]\n\n[^1]: <b>note</b>"
+        out = self.conv(src)
+        self.assertIn(RAW_HTML_ROLE_DEFINITION, out)
+
+    def test_image_in_body_and_footnote_is_defined_once(self):
+        src = """\
+see ![i](https://example.com/i.png) text[^1]
+
+[^1]: see ![i](https://example.com/i.png)"""
+        out = self.conv(src)
+        self.assertEqual(out.count("image:: https://example.com/i.png"), 1)
 
 
 class TestDirective(RendererTestBase):
@@ -1618,7 +2082,7 @@ class TestRawHtmlProlog(RendererTestBase):
         self.assertIn(":raw-html-m2r:", out)
 
     def test_prolog_not_sticky_across_calls(self):
-        """Ensure raw HTML in one document doesn't leak PROLOG into the next."""
+        """Ensure raw HTML in one document doesn't leak its role definition into the next."""
         converter = M2R2()
         out1 = converter("text <b>bold</b> text")
         self.assertIn("raw-html-m2r", out1)
@@ -1655,17 +2119,17 @@ before ![A](a.png) after
 * before ![A](a.png) after
 """
         expected = """
-.. |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| image:: a.png
+.. |m2r-image-d79de0460ffb| image:: a.png
    :target: a.png
    :alt: A
 
 
-|m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407|
-================================================================================
+|m2r-image-d79de0460ffb|
+============================
 
-before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+before |m2r-image-d79de0460ffb| after
 
-* before |m2r-image-d79de0460ffb1b7efdeb0bfe4f3b6e4c429069f843367cfd6d95707acdd35407| after
+* before |m2r-image-d79de0460ffb| after
 """
         self.assertEqual(converter(source), expected)
         self.assertEqual(converter("plain text"), "\nplain text\n")
@@ -1705,3 +2169,23 @@ Text[^1].
         out2 = converter("no footnotes here\n")
         self.assertNotIn("[#fn", out2)
         self.assertIn("no footnotes here", out2)
+
+
+class TestSubstitutionNames(TestCase):
+    """Substitutions are named after a hash of what they define."""
+
+    def test_name_holds_twelve_hex_characters(self):
+        out = convert("see ![A](a.png) here\n")
+        self.assertRegex(out, r"\.\. \|m2r-image-[0-9a-f]{12}\| image:: a\.png")
+
+    def test_same_content_is_defined_once(self):
+        out = convert("see ![A](a.png) and ![A](a.png) here\n")
+        self.assertEqual(out.count("image:: a.png"), 1)
+
+    def test_colliding_names_raise(self):
+        state = BlockState()
+        with patch.object(renderer_module, "sha256") as hash_content:
+            hash_content.return_value.hexdigest.return_value = "0" * 64
+            define_substitution(state, "m2r-image", "image:: first.png")
+            with self.assertRaises(SubstitutionNameCollision):
+                define_substitution(state, "m2r-image", "image:: second.png")

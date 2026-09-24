@@ -33,7 +33,8 @@ Sphinx documents benefit from being written in markdown, since it's widely used 
 * Sphinx extension
     * add markdown support for sphinx
     * ``mdinclude`` directive to include markdown from md or rst files
-    * option to parse relative links into ref and doc directives (``m2r_parse_relative_links``)
+    * option to parse relative document links into ``:doc:`` roles (``m2r_parse_relative_links``)
+    * resolve links to Markdown headings by GitHub anchor and to RST labels
     * option to render ``mermaid`` blocks as graphs with [sphinxcontrib.mermaid](https://sphinxcontrib-mermaid-demo.readthedocs.io/en/latest/index.html) (``m2r_use_mermaid``, default: auto)
       * auto means that m2r2 will check if `sphinxcontrib.mermaid` has been added to the extensions list
 * Pure python implementation
@@ -73,8 +74,7 @@ Then you will find `your_document.rst` in the same directory.
 
 ### Programmatic Use
 
-Import `m2r2.convert` function and call it with markdown text.
-Then it will return converted text.
+Import `m2r2.convert` function and call it with markdown text. Then it will return converted text.
 
 ```python
 from m2r2 import convert
@@ -95,19 +95,96 @@ from m2r2 import parse_from_file
 output = parse_from_file('markdown_file.md')
 ```
 
-### Upgrading to 1.0
+### Upgrading to 2.0
 
-The reusable converter class is named `M2R2`. Existing imports of `M2R` still
-work through an alias. The `convert` and `parse_from_file` functions remain available.
+#### Update Python calls
 
-Generated RST may use different spacing while preserving document content and
-structure. Standalone images keep block image directives. Images within text,
-headings, and table cells use substitutions so they can appear inline.
-RST cannot nest inline markup, so emphasis is applied to surrounding text
-while nested links and code retain their own formatting.
+Replace `disable_inline_math=True` with `inline_math=None` in calls to `convert`, `parse_from_file`, and `M2R2`:
 
-In Sphinx configuration, use `m2r_no_underscore_emphasis` instead of
-`no_underscore_emphasis`. The old name still works with a deprecation warning.
+```python
+# 1.x
+convert(markdown, disable_inline_math=True)
+
+# 2.0
+convert(markdown, inline_math=None)
+```
+
+Remove `disable_inline_math=False` wherever you set it. The default remains `"legacy"`. To parse `$x$` instead of the legacy `` `$x$` `` form, pass `inline_math="dollar"`. The CLI still accepts `--disable-inline-math`. Use `--inline-math dollar` to select dollar delimiters there.
+
+If you passed a `RestRenderer` to `M2R2` only to set its options, pass those options to `M2R2` instead. The `plugins` argument still works:
+
+```python
+# 1.x
+M2R2(renderer=RestRenderer(parse_relative_links=True), plugins=plugins)
+
+# 2.0
+M2R2(parse_relative_links=True, plugins=plugins)
+```
+
+Do the same for `anonymous_references` and `use_mermaid`. If you used `RestRenderer` directly with Mistune, switch to `M2R2` to obtain a complete RST document. Direct rendering now omits the required role and substitution definitions.
+
+For a custom Sphinx parser or directive, construct the converter from the current docutils document:
+
+```python
+from m2r2.sphinx.converter import SphinxM2R2
+
+rst = SphinxM2R2(document, source_path=markdown_path)(markdown)
+```
+
+#### Update Sphinx configuration
+
+In `conf.py`, replace `m2r_disable_inline_math = True` with `m2r_inline_math = None`. Remove `m2r_disable_inline_math = False` to keep the default legacy syntax. To select dollar delimiters, set `m2r_inline_math = "dollar"`. The old name still works but emits a deprecation warning.
+
+#### Review Markdown and generated RST
+
+Build your Sphinx project and check fragment links. Links to Markdown headings now use GitHub heading slugs, such as `#installation` or `#installation-1` for a repeated heading. Explicit RST labels still resolve. Set `m2r_parse_relative_links = True` in `conf.py` if you link to a heading in another Markdown file, such as `[Install](guide.md#installation)`. Fix any `m2r2.anchor` warnings by correcting the document path or fragment.
+
+A leading `/` in `.. mdinclude:: /part.md` now points to `part.md` in the Sphinx source directory. For a file outside that directory, use a path relative to the file containing the directive. Check image paths in included Markdown too. They now resolve from the included file's directory.
+
+Remove any `:parser:` option from `mdinclude`. The directive always parses Markdown. If a link uses a Markdown title such as `[Guide](guide.md "extra")`, move important title text into the visible link text or nearby prose. RST output does not retain link titles.
+
+If you keep generated RST or snapshots in your repository, regenerate them. Generated substitution names have changed. Avoid referencing those names from handwritten RST.
+
+### Inline math
+
+Choose the syntax with `inline_math` in Python, `m2r_inline_math` in Sphinx, or `--inline-math` on the command line:
+
+| Mode | Syntax |
+| --- | --- |
+| `"legacy"` (default) | `` `$x^2$` `` |
+| `"dollar"` | `$x^2$` or `` $`x^2`$ `` |
+| `None` (CLI: `--disable-inline-math`) | Disable inline math conversion |
+
+For example:
+
+```python
+convert("An equation: $x^2$.", inline_math="dollar")
+```
+
+In `conf.py`, set `m2r_inline_math = "dollar"` to use the same inline math delimiters as GitHub and GitLab. Ordinary code spans remain code in this mode.
+
+Bare `$...$` delimiters must enclose nonempty text on one line without spaces at its edges. A closing dollar sign cannot be followed by a digit. These rules keep examples such as `$5-$10` and `$20,000 and $30,000` as text. Escape literal dollar signs with a backslash when they could be interpreted as delimiters. Backslashes inside math expressions, including `\$`, are preserved.
+
+`None` disables only inline math. Fenced `math` blocks still render as math. Double-dollar display math is not supported. Use a fenced `math` block instead.
+
+### GitHub alerts
+
+GitHub alerts become RST admonitions automatically:
+
+```markdown
+> [!WARNING]
+> Back up your **files** before proceeding.
+```
+
+This produces:
+
+```rst
+.. warning::
+
+   Back up your **files** before proceeding.
+```
+
+Supported markers are `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and `[!CAUTION]`. Put the marker on its own first line in a top-level block quote. The body supports Markdown formatting, including paragraphs, lists, and code blocks. Alerts nested inside lists or other quotes remain ordinary quotes. Emoji shortcodes such as `:warning:` do not create admonitions.
 
 ### Sphinx Integration
 
@@ -127,11 +204,44 @@ Write index.md and run `make html`.
 
 When `m2r2` extension is enabled on sphinx and `.md` file is loaded, m2r2 converts to rst and pass to sphinx, not making new `.rst` file.
 
+#### Links to headings and labels
+
+Under Sphinx, a link such as `[install](#installation)` resolves the anchor that GitHub gives the heading. Repeated headings use numbered anchors such as `#installation-1`. A fragment can also name an explicit RST label.
+
+Enable `m2r_parse_relative_links` to resolve links to anchors in other Markdown documents:
+
+```python
+m2r_parse_relative_links = True
+```
+
+Then `[install](guide.md#installation)` resolves within `guide.md`. Relative links without a fragment become ``:doc:`` roles. A missing document or anchor produces an `m2r2.anchor` warning. Suppress these warnings in `conf.py` only when unresolved links are intentional:
+
+```python
+suppress_warnings = ["m2r2.anchor"]
+```
+
 #### mdinclude directive
 
-Like `.. include:: file` directive, `.. mdinclude:: file` directive inserts markdown file at the line.
+Use `mdinclude` in a Markdown or RST document to convert and insert another Markdown file:
 
-Note: do not use `.. include:: file` directive to include markdown file even if in the markdown file, please use `.. mdinclude:: file` instead.
+```rst
+.. mdinclude:: path/to/part.md
+```
+
+A relative path starts at the file holding the directive. A path beginning with `/` starts at the Sphinx source directory.
+
+Relative Markdown image paths, such as `![Badge](assets/badge.svg)`, start at the included Markdown file's directory. This also applies to inline images, tables, and nested includes. For example, a project-root `README.md` included from `docs/index.rst` can use images from `assets/` beside the README without symlinks. Image paths beginning with `/` start at the Sphinx source directory.
+
+The directive accepts these options:
+
+* `start-line` is zero-based and `end-line` is exclusive. For example, `:start-line: 1` with `:end-line: 3` keeps the second and third lines.
+* `lines` selects one-based lines and ranges such as `1, 3-5, 8-`. It cannot be combined with `start-line`, `end-line`, `literal`, or `code`.
+* `start-after` and `end-before` keep the text between two markers. Like docutils' `include`, each marker matches text rather than a whole line, and the marker itself is omitted. Line selection happens before marker matching.
+* `encoding` sets the source file encoding. `tab-width` sets the tab width.
+* `literal` shows the file without converting it. `code` also skips conversion and uses its value as the syntax language.
+* With `literal` or `code`, `number-lines` adds line numbers, `name` gives the shown block a target name, and `class` adds CSS classes.
+
+The `parser` option is not supported because `mdinclude` always parses Markdown. Docutils reports it as an unknown option. Use `mdinclude`, not `include`, for a Markdown file that should be converted.
 
 #### Using mdinclude with another markdown parser
 

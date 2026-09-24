@@ -1,5 +1,17 @@
+from docutils.parsers import rst
+
 from m2r2.m2r2 import __version__
-from m2r2.parser import M2R2Parser
+from m2r2.sphinx.converter import SphinxM2R2
+
+
+class M2R2Parser(rst.Parser):
+    """Parse Markdown using a Sphinx document's configuration and context."""
+
+    supported = ("markdown", "md", "mkd")
+
+    def parse(self, inputstring, document):
+        """Populate the Sphinx document from Markdown source."""
+        super().parse(SphinxM2R2(document).parse(inputstring), document)
 
 
 def setup(app):

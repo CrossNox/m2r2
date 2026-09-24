@@ -1,5 +1,6 @@
 """Tests for the m2r2 CLI."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,35 @@ class TestConvert(TestCase):
         md = tmpdir / "test.md"
         md.write_text(test_md.read_text())
         return md, tmpdir / "test.rst"
+
+    def test_conversion_and_cli_work_without_sphinx(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = Path(tmpdir)
+            (directory / "sphinx.py").write_text(
+                'raise ModuleNotFoundError("Sphinx is unavailable")\n'
+            )
+            markdown = directory / "page.md"
+            markdown.write_text("# Title\n")
+
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = os.pathsep.join(
+                (tmpdir, environment.get("PYTHONPATH", ""))
+            )
+            commands = (
+                [
+                    sys.executable,
+                    "-c",
+                    'from m2r2 import convert; print(convert("# Title"))',
+                ],
+                [sys.executable, "-m", "m2r2", "--dry-run", str(markdown)],
+            )
+            for command in commands:
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        command, capture_output=True, text=True, env=environment
+                    )
+                    self.assertEqual(result.returncode, 0, msg=result.stderr)
+                    self.assertIn("Title", result.stdout)
 
     def test_no_file(self):
         p = subprocess.Popen(
@@ -57,6 +87,7 @@ class TestConvert(TestCase):
             "--no-underscore-emphasis",
             "--parse-relative-links",
             "--anonymous-references",
+            "--inline-math",
             "--disable-inline-math",
             "--use-mermaid",
         ]
@@ -200,6 +231,38 @@ class TestConvert(TestCase):
         output = stdout.getvalue()
         self.assertIn("``$E = mc^2$``", output)
         self.assertNotIn(":math:", output)
+
+    def test_dollar_inline_math(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "math.md"
+            source.write_text("$x$ and $`y`$\n")
+            stdout = StringIO()
+            with patch("sys.stdout", stdout):
+                main(["--inline-math", "dollar", "--dry-run", str(source)])
+            self.assertIn(":math:`x`", stdout.getvalue())
+            self.assertIn(":math:`y`", stdout.getvalue())
+
+    def test_invalid_inline_math_option(self):
+        for value in ("none", "unknown"):
+            with self.subTest(value=value):
+                with (
+                    patch("sys.stderr", StringIO()),
+                    self.assertRaises(SystemExit) as error,
+                ):
+                    main(["--inline-math", value, str(test_md)])
+                self.assertEqual(error.exception.code, 2)
+
+    def test_inline_math_options_are_mutually_exclusive(self):
+        with patch("sys.stderr", StringIO()), self.assertRaises(SystemExit) as error:
+            main(
+                [
+                    "--inline-math",
+                    "dollar",
+                    "--disable-inline-math",
+                    str(test_md),
+                ]
+            )
+        self.assertEqual(error.exception.code, 2)
 
     def test_parse_relative_links_option(self):
         with tempfile.TemporaryDirectory() as tmpdir:

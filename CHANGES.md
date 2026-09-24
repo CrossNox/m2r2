@@ -1,3 +1,35 @@
+### Version 2.0.0 (2026-09-24)
+
+#### Breaking changes
+
+* Replace the Python `disable_inline_math` argument with `inline_math`, accepting `"legacy"`, `"dollar"`, or `None`.
+* Require Mistune 3.2 or newer so footnote rendering shares document definitions.
+* Remove the `renderer` argument from `M2R2`. `SphinxM2R2` constructs a converter from a docutils document for Sphinx integrations.
+* Make `RestRenderer` render only the document body when it is used directly with Mistune. `M2R2` writes the role and substitution definitions for a complete document.
+* Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.
+* Discard Markdown link titles, which RST references cannot represent.
+* Resolve fragment links under Sphinx with the `m2r-anchor` role instead of `:ref:`.
+* Render links in headings with plain text and anonymous references so section ids stay readable.
+* Start absolute `mdinclude` paths at the Sphinx source directory instead of the filesystem root.
+
+#### Fixes and additions
+
+* Resolve relative Markdown image paths from the included file's directory, including nested includes. Keep image substitutions distinct when different files use the same relative image path.
+* Convert GitHub alerts (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, and `[!CAUTION]`) into RST admonitions.
+* Add dollar-delimited inline math with `inline_math="dollar"`, supporting `$...$` and dollar-backtick delimiters. Keep `"legacy"` as the default and use `None` to disable inline math.
+* Add `--inline-math legacy` and `--inline-math dollar` to the CLI. Keep `--disable-inline-math` to turn off inline math.
+* Add the Sphinx setting `m2r_inline_math`. Keep `m2r_disable_inline_math` as a deprecated alias with a warning. An explicit new setting takes precedence.
+* Write document definitions after footnotes render, so links and images in footnotes have their definitions.
+* Preserve emphasis around links and inline markup within link text by using substitutions where RST cannot express the nesting directly.
+* Render empty links as empty references and move footnote references out of link text.
+* Prevent references from nesting inside links. Linked images lose their own targets, and plain link text escapes characters that create RST references.
+* Render strikethrough content as HTML and keep its inline Markdown formatting.
+* Preserve backslashes in text.
+* Derive image alt text from plain text.
+* Resolve same-page and cross-page links to Markdown headings by their GitHub anchors. Resolve explicit RST labels before generated heading anchors with the same name.
+* Add `start-after`, `end-before`, `lines`, `literal`, `code`, `number-lines`, `name`, and `class` to `mdinclude`. Reject its `parser` option.
+* Track files read by `mdinclude` so Sphinx rebuilds them when they change.
+
 ### Version 1.1.0 (2026-09-18)
 * Add the `m2r2.mdinclude` Sphinx extension. It provides the `mdinclude` directive and leaves `.md` files to another parser.
 
