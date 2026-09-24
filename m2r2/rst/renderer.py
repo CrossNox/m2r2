@@ -222,15 +222,15 @@ class RestRenderer(RSTRenderer):
                 pending_blank_lines += 1
                 continue
 
-            if pending_blank_lines > 0 and (
-                tok["type"] == "directive"
-                or (
+            if pending_blank_lines > 0:
+                before_directive = tok["type"] == "directive"
+                after_directive_without_blank_line = (
                     prev_tok is not None
                     and prev_tok["type"] == "directive"
                     and not prev_tok.get("raw", "").endswith("\n\n")
                 )
-            ):
-                yield "\n" * pending_blank_lines
+                if before_directive or after_directive_without_blank_line:
+                    yield "\n" * pending_blank_lines
             pending_blank_lines = 0
 
             tok["prev"] = prev_tok
@@ -667,7 +667,9 @@ class RestRenderer(RSTRenderer):
 
     def footnotes(self, token, state):
         content = self.render_children(token, state)
-        return "\n\n" + content if content else ""
+        if content:
+            return "\n\n" + content
+        return ""
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
         """Assemble the rendered document with its required definitions."""
