@@ -29,10 +29,10 @@ class VisibleHtmlTextParser(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
+        self.visible_text_parts: list[str] = []
 
     def handle_data(self, data: str) -> None:
-        self.parts.append(data)
+        self.visible_text_parts.append(data)
 
 
 def slugify_heading_like_github(title: str) -> str:
@@ -107,9 +107,9 @@ def find_documents_with_changed_anchor_references(
     anchors = get_or_create_document_anchor_map(env)
     documents_to_rewrite = set()
     for docname, references in get_or_create_document_anchor_references(env).items():
-        for (target_docname, slug), previous_id in references.items():
+        for (target_docname, slug), previous_element_id in references.items():
             element_id = anchors.get(target_docname, {}).get(slug)
-            if element_id != previous_id:
+            if element_id != previous_element_id:
                 documents_to_rewrite.add(docname)
                 references[target_docname, slug] = element_id
 
@@ -137,10 +137,10 @@ def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
 def extract_visible_heading_text(node: nodes.Node) -> str:
     """Return heading text without HTML tags."""
     if isinstance(node, nodes.raw):
-        parser = VisibleHtmlTextParser()
-        parser.feed(node.astext())
-        parser.close()
-        return "".join(parser.parts)
+        html_text_parser = VisibleHtmlTextParser()
+        html_text_parser.feed(node.astext())
+        html_text_parser.close()
+        return "".join(html_text_parser.visible_text_parts)
     if isinstance(node, nodes.Text):
         return node.astext()
     return "".join(extract_visible_heading_text(child) for child in node.children)
