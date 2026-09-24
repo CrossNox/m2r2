@@ -71,18 +71,22 @@ def get_or_create_document_anchor_map(
     env: BuildEnvironment,
 ) -> dict[str, dict[str, str]]:
     """Get or create the map from document anchors to element ids."""
-    if not hasattr(env, "m2r2_document_anchors"):
+    try:
+        return env.m2r2_document_anchors
+    except AttributeError:
         env.m2r2_document_anchors = {}
-    return env.m2r2_document_anchors
+        return env.m2r2_document_anchors
 
 
 def get_or_create_document_anchor_references(
     env: BuildEnvironment,
 ) -> dict[str, dict[tuple[str, str], str | None]]:
     """Return the anchor references and their last resolved IDs for each document."""
-    if not hasattr(env, "m2r2_document_anchor_references"):
+    try:
+        return env.m2r2_document_anchor_references
+    except AttributeError:
         env.m2r2_document_anchor_references = {}
-    return env.m2r2_document_anchor_references
+        return env.m2r2_document_anchor_references
 
 
 def normalize_target_document_path(
