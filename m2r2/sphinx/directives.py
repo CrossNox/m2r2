@@ -119,25 +119,21 @@ class MdInclude(Include):
         Exclude the markers. Raise a severe directive error if a specified
         marker is missing.
         """
-        start_marker = self.options.get("start-after")
-        if start_marker is not None:
-            start_index = text.find(start_marker)
-            if start_index < 0:
-                raise self.severe(
-                    f'Problem with "start-after" option of "{self.name}" '
-                    "directive:\nText not found."
-                )
-            text = text[start_index + len(start_marker) :]
+        for option in ("start-after", "end-before"):
+            marker = self.options.get(option)
+            if marker is None:
+                continue
 
-        end_marker = self.options.get("end-before")
-        if end_marker is not None:
-            end_index = text.find(end_marker)
-            if end_index < 0:
+            index = text.find(marker)
+            if index < 0:
                 raise self.severe(
-                    f'Problem with "end-before" option of "{self.name}" '
+                    f'Problem with "{option}" option of "{self.name}" '
                     "directive:\nText not found."
                 )
-            text = text[:end_index]
+            if option == "start-after":
+                text = text[index + len(marker) :]
+            else:
+                text = text[:index]
 
         return text
 
