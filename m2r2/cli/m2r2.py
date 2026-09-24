@@ -133,11 +133,17 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="use anonymous references for links with plain text",
     )
-    parser.add_argument(
+    inline_math_options = parser.add_mutually_exclusive_group()
+    inline_math_options.add_argument(
         "--inline-math",
-        choices=("legacy", "dollar", "none"),
+        choices=("legacy", "dollar"),
         default="legacy",
-        help="select inline math syntax, or none to disable it (default: legacy)",
+        help="select inline math syntax (default: legacy)",
+    )
+    inline_math_options.add_argument(
+        "--disable-inline-math",
+        action="store_true",
+        help="disable inline math conversion",
     )
     parser.add_argument(
         "--use-mermaid",
@@ -166,7 +172,7 @@ def run_m2r2(args: argparse.Namespace) -> None:
             no_underscore_emphasis=args.no_underscore_emphasis,
             parse_relative_links=args.parse_relative_links,
             anonymous_references=args.anonymous_references,
-            inline_math=None if args.inline_math == "none" else args.inline_math,
+            inline_math=None if args.disable_inline_math else args.inline_math,
             use_mermaid=args.use_mermaid,
         )
         if args.dry_run:

@@ -88,6 +88,7 @@ class TestConvert(TestCase):
             "--parse-relative-links",
             "--anonymous-references",
             "--inline-math",
+            "--disable-inline-math",
             "--use-mermaid",
         ]
         for option in options:
@@ -226,7 +227,7 @@ class TestConvert(TestCase):
     def test_disable_inline_math(self):
         stdout = StringIO()
         with patch("sys.stdout", stdout):
-            main(["--inline-math", "none", "--dry-run", str(test_md)])
+            main(["--disable-inline-math", "--dry-run", str(test_md)])
         output = stdout.getvalue()
         self.assertIn("``$E = mc^2$``", output)
         self.assertNotIn(":math:", output)
@@ -242,8 +243,25 @@ class TestConvert(TestCase):
             self.assertIn(":math:`y`", stdout.getvalue())
 
     def test_invalid_inline_math_option(self):
+        for value in ("none", "unknown"):
+            with self.subTest(value=value):
+                with (
+                    patch("sys.stderr", StringIO()),
+                    self.assertRaises(SystemExit) as error,
+                ):
+                    main(["--inline-math", value, str(test_md)])
+                self.assertEqual(error.exception.code, 2)
+
+    def test_inline_math_options_are_mutually_exclusive(self):
         with patch("sys.stderr", StringIO()), self.assertRaises(SystemExit) as error:
-            main(["--inline-math", "unknown", str(test_md)])
+            main(
+                [
+                    "--inline-math",
+                    "dollar",
+                    "--disable-inline-math",
+                    str(test_md),
+                ]
+            )
         self.assertEqual(error.exception.code, 2)
 
     def test_parse_relative_links_option(self):

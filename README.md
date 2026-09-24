@@ -129,8 +129,9 @@ Under Sphinx, fragment links resolve Markdown headings by their GitHub anchors
 and also resolve explicit RST labels. They no longer become ``:ref:`` roles.
 Absolute `mdinclude` paths now start at the Sphinx source directory.
 
-Replace the Python argument `disable_inline_math=True` with `inline_math=None`
-and the CLI flag `--disable-inline-math` with `--inline-math none`.
+Replace the Python argument `disable_inline_math=True` with `inline_math=None`.
+The CLI keeps `--disable-inline-math` and adds `--inline-math legacy` or
+`--inline-math dollar`.
 In Sphinx, replace `m2r_disable_inline_math=True` with `m2r_inline_math=None`.
 The old Sphinx name remains an alias and emits a deprecation warning, including
 when set to `False`. An explicit `m2r_inline_math` setting takes precedence.
@@ -144,7 +145,7 @@ Choose the syntax with `inline_math` in Python, `m2r_inline_math` in Sphinx, or
 | --- | --- |
 | `"legacy"` (default) | `` `$x^2$` `` |
 | `"dollar"` | `$x^2$` or `` $`x^2`$ `` |
-| `None` (CLI: `none`) | Disable inline math conversion |
+| `None` (CLI: `--disable-inline-math`) | Disable inline math conversion |
 
 For example:
 
