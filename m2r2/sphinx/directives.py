@@ -57,22 +57,24 @@ class MdInclude(Include):
 
     def select_lines(self, text):
         """Select source lines using the directive's line options."""
-        lines = text.splitlines(keepends=True)
+        source_lines = text.splitlines(keepends=True)
         start_line = self.options.get("start-line")
         end_line = self.options.get("end-line")
 
         if "lines" not in self.options:
             if start_line is None and end_line is None:
                 return text
-            return "".join(lines[start_line:end_line])
+            return "".join(source_lines[start_line:end_line])
 
         if start_line is not None or end_line is not None:
             raise self.severe(
                 f'Problem with "lines" option of "{self.name}" directive:\n'
                 'It cannot be combined with "start-line" or "end-line".'
             )
-        line_indexes = self.parse_line_selection(self.options["lines"], len(lines))
-        return "".join(lines[index] for index in line_indexes)
+        selected_line_indexes = self.parse_line_selection(
+            self.options["lines"], len(source_lines)
+        )
+        return "".join(source_lines[line_index] for line_index in selected_line_indexes)
 
     def parse_line_selection(self, selection, line_count):
         """Convert a line selection to zero-based indexes in selection order.
@@ -80,38 +82,48 @@ class MdInclude(Include):
         Accept one-based line numbers and inclusive ranges, such as ``1, 3-4``.
         Open ranges extend to the first or last line, as in ``-4`` and ``7-``.
         """
-        indexes: list[int] = []
-        for entry in selection.split(","):
-            first_text, dash, last_text = entry.strip().partition("-")
+        selected_line_indexes: list[int] = []
+        for selection_entry in selection.split(","):
+            first_line_text, range_separator, last_line_text = (
+                selection_entry.strip().partition("-")
+            )
             try:
-                if dash == "":
-                    first = last = int(first_text)
-                elif first_text == "" and last_text == "":
-                    raise ValueError(entry)
+                if range_separator == "":
+                    first_line_number = last_line_number = int(first_line_text)
+                elif first_line_text == "" and last_line_text == "":
+                    raise ValueError(selection_entry)
                 else:
-                    first = 1 if first_text == "" else int(first_text)
-                    last = line_count if last_text == "" else int(last_text)
+                    first_line_number = (
+                        1 if first_line_text == "" else int(first_line_text)
+                    )
+                    last_line_number = (
+                        line_count if last_line_text == "" else int(last_line_text)
+                    )
             except ValueError as error:
                 raise self.severe(
                     f'Problem with "lines" option of "{self.name}" directive:\n'
-                    f"Cannot read {entry.strip()!r} as a line or a range of lines."
+                    f"Cannot read {selection_entry.strip()!r} as a line or a range of lines."
                 ) from error
 
-            if first < 1 or last > line_count or first > line_count:
+            if (
+                first_line_number < 1
+                or last_line_number > line_count
+                or first_line_number > line_count
+            ):
                 raise self.severe(
                     f'Problem with "lines" option of "{self.name}" directive:\n'
-                    f"{entry.strip()!r} is outside the file, which has "
+                    f"{selection_entry.strip()!r} is outside the file, which has "
                     f"{line_count} lines."
                 )
-            if first > last:
+            if first_line_number > last_line_number:
                 raise self.severe(
                     f'Problem with "lines" option of "{self.name}" directive:\n'
-                    f"The range {entry.strip()!r} ends before it starts."
+                    f"The range {selection_entry.strip()!r} ends before it starts."
                 )
 
-            indexes.extend(range(first - 1, last))
+            selected_line_indexes.extend(range(first_line_number - 1, last_line_number))
 
-        return indexes
+        return selected_line_indexes
 
     def clip_text_between_markers(self, text):
         """Select text using the directive's start and end markers.
