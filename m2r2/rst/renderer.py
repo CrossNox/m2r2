@@ -111,8 +111,8 @@ def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
     Built-in Sphinx reference roles accept a title followed by a target in
     angle brackets. Ordinary roles keep their entire body, including comparisons.
     """
-    prefix, body, suffix = str(token["text"]).split("`", 2)
-    role_name = (prefix + suffix).strip(":").split(":")[-1]
+    role_prefix, role_body, role_suffix = str(token["text"]).split("`", 2)
+    role_name = (role_prefix + role_suffix).strip(":").split(":")[-1]
     if (
         token["type"] == "rest_link"
         or role_name
@@ -123,10 +123,10 @@ def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
             "function method attribute module directive role"
         ).split()
     ):
-        title, separator, target = body.rpartition(" <")
-        if separator != "" and target.endswith(">"):
-            return title
-    return body
+        explicit_title, target_separator, explicit_target = role_body.rpartition(" <")
+        if target_separator != "" and explicit_target.endswith(">"):
+            return explicit_title
+    return role_body
 
 
 def escape_role_title(text: str) -> str:
@@ -136,37 +136,39 @@ def escape_role_title(text: str) -> str:
 
 def remove_footnote_references(token: dict[str, Any]) -> list[dict[str, Any]]:
     """Remove footnote references from a token's children and return them in order."""
-    removed: list[dict[str, Any]] = []
+    footnote_references: list[dict[str, Any]] = []
     children = token.get("children")
     if children is None:
-        return removed
+        return footnote_references
 
-    kept = []
-    for child in children:
-        if child["type"] in ("footnote_ref", "rst_footnote_ref"):
-            removed.append(child)
+    remaining_children = []
+    for child_token in children:
+        if child_token["type"] in ("footnote_ref", "rst_footnote_ref"):
+            footnote_references.append(child_token)
             continue
-        removed.extend(remove_footnote_references(child))
-        kept.append(child)
-    token["children"] = kept
+        footnote_references.extend(remove_footnote_references(child_token))
+        remaining_children.append(child_token)
+    token["children"] = remaining_children
 
-    return removed
+    return footnote_references
 
 
 def merge_adjacent_raw_html_roles(text: str) -> str:
     """Join raw HTML roles that mistune splits across tokens."""
     # The middle group accepts escaped characters, but stops at line boundaries
     # and inline markup that must still be parsed as RST.
-    pattern = re.compile(
+    raw_html_role_pattern = re.compile(
         rf":{RAW_HTML_ROLE_NAME}:`([^`]+)`\\ "
         rf"((?:\\[^\n]|[^\\\n`*|])+?)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
     )
 
-    while (match := pattern.search(text)) is not None:
-        plain_text = unescape(escape2null(match[2]))
-        html_text = html.escape(plain_text, quote=False).replace("`", "&#96;")
-        replacement = f":{RAW_HTML_ROLE_NAME}:`{match[1]}{html_text}{match[3]}`"
-        text = text[: match.start()] + replacement + text[match.end() :]
+    while (role_match := raw_html_role_pattern.search(text)) is not None:
+        plain_text = unescape(escape2null(role_match[2]))
+        escaped_html_text = html.escape(plain_text, quote=False).replace("`", "&#96;")
+        merged_role = (
+            f":{RAW_HTML_ROLE_NAME}:`{role_match[1]}{escaped_html_text}{role_match[3]}`"
+        )
+        text = text[: role_match.start()] + merged_role + text[role_match.end() :]
 
     return text
 
@@ -214,28 +216,28 @@ class RestRenderer(RSTRenderer):
         self, tokens: Iterable[dict[str, Any]], state: BlockState
     ) -> Iterable[str]:
         """Render tokens while preserving blank lines around RST directives."""
-        prev_tok = None
+        previous_token = None
         pending_blank_lines = 0
 
-        for tok in tokens:
-            if tok["type"] == "blank_line":
+        for token in tokens:
+            if token["type"] == "blank_line":
                 pending_blank_lines += 1
                 continue
 
             if pending_blank_lines > 0:
-                before_directive = tok["type"] == "directive"
+                before_directive = token["type"] == "directive"
                 after_directive_without_blank_line = (
-                    prev_tok is not None
-                    and prev_tok["type"] == "directive"
-                    and not prev_tok.get("raw", "").endswith("\n\n")
+                    previous_token is not None
+                    and previous_token["type"] == "directive"
+                    and not previous_token.get("raw", "").endswith("\n\n")
                 )
                 if before_directive or after_directive_without_blank_line:
                     yield "\n" * pending_blank_lines
             pending_blank_lines = 0
 
-            tok["prev"] = prev_tok
-            prev_tok = tok
-            yield self.render_token(tok, state)
+            token["prev"] = previous_token
+            previous_token = token
+            yield self.render_token(token, state)
 
     def __call__(self, tokens: Iterable[dict[str, Any]], state: BlockState) -> str:
         """Render a token sequence without emitting document definitions.
@@ -283,18 +285,18 @@ class RestRenderer(RSTRenderer):
 
     def block_code(self, token: dict[str, Any], state: BlockState):
         code_text = token.get("raw", "")
-        info = token.get("attrs", {}).get("info", "")
-        lang = info.split()[0] if info else ""
+        info_string = token.get("attrs", {}).get("info", "")
+        language = info_string.split()[0] if info_string else ""
 
-        if lang == "math":
-            first_line = "\n.. math::\n\n"
-        elif lang == "mermaid" and self.use_mermaid:
-            first_line = "\n.. mermaid::\n\n"
-        elif lang:
-            first_line = f"\n.. code-block:: {lang}\n\n"
+        if language == "math":
+            code_block_start = "\n.. math::\n\n"
+        elif language == "mermaid" and self.use_mermaid:
+            code_block_start = "\n.. mermaid::\n\n"
+        elif language:
+            code_block_start = f"\n.. code-block:: {language}\n\n"
         else:
-            first_line = self.unlabeled_code_block_start
-        return first_line + self._indent_block(code_text) + "\n"
+            code_block_start = self.unlabeled_code_block_start
+        return code_block_start + self._indent_block(code_text) + "\n"
 
     def directive(self, token, state):
         """Preserve an RST directive and any trailing blank lines."""
@@ -334,9 +336,10 @@ class RestRenderer(RSTRenderer):
         ``emphasis_marker`` is the RST emphasis around the link, empty for none.
         """
         footnote_references = remove_footnote_references(token)
-        rendered = self.render_linked_text(token, state, emphasis_marker)
-        return rendered + "".join(
-            self.render_token(reference, state) for reference in footnote_references
+        rendered_link = self.render_linked_text(token, state, emphasis_marker)
+        return rendered_link + "".join(
+            self.render_token(footnote_reference, state)
+            for footnote_reference in footnote_references
         )
 
     def render_linked_text(
@@ -435,20 +438,20 @@ class RestRenderer(RSTRenderer):
 
     def github_alert(self, token, state):
         """Render a GitHub alert as an RST admonition."""
-        children = self.render_children(token, state).strip()
-        if children == "":
+        alert_content = self.render_children(token, state).strip()
+        if alert_content == "":
             # RST admonitions require content, even for an empty Markdown alert.
-            children = ".."
-        indented = self._indent_block(children)
-        kind = token["attrs"]["kind"]
-        return f"\n.. {kind}::\n\n{indented}\n\n"
+            alert_content = ".."
+        indented_alert_content = self._indent_block(alert_content)
+        alert_kind = token["attrs"]["kind"]
+        return f"\n.. {alert_kind}::\n\n{indented_alert_content}\n\n"
 
     def block_quote(self, token, state):
         """Render a block quote as indented RST."""
-        children = self.render_children(token, state)
+        quote_content = self.render_children(token, state)
         # Indent all lines by 3 spaces and add blank line before/after
-        indented = self._indent_block(children.strip())
-        return f"\n..\n\n{indented}\n\n"
+        indented_quote = self._indent_block(quote_content.strip())
+        return f"\n..\n\n{indented_quote}\n\n"
 
     def text(self, token: dict[str, Any], state: BlockState) -> str:
         """Escape parsed Markdown text for its RST context."""
@@ -543,19 +546,20 @@ class RestRenderer(RSTRenderer):
     def strikethrough(self, token, state):
         """Wrap rendered inline content in HTML deletion tags."""
         footnote_references = remove_footnote_references(token)
-        opening_del_name = define_substitution(
+        opening_deletion_substitution_name = define_substitution(
             state, "m2r-del-open", "raw:: html\n\n   <del>"
         )
-        closing_del_name = define_substitution(
+        closing_deletion_substitution_name = define_substitution(
             state, "m2r-del-close", "raw:: html\n\n   </del>"
         )
         struck_content = (
-            rf"\ |{opening_del_name}|\ "
+            rf"\ |{opening_deletion_substitution_name}|\ "
             + self.render_children(token, state)
-            + rf"\ |{closing_del_name}|\ "
+            + rf"\ |{closing_deletion_substitution_name}|\ "
         )
         return struck_content + "".join(
-            self.render_token(reference, state) for reference in footnote_references
+            self.render_token(footnote_reference, state)
+            for footnote_reference in footnote_references
         )
 
     def emphasis(self, token: dict[str, Any], state: BlockState) -> str:
@@ -569,28 +573,32 @@ class RestRenderer(RSTRenderer):
     ) -> str:
         """Apply emphasis to text without nesting RST inline markup."""
 
-        def emphasize(text):
-            content = text.strip()
-            if content:
-                return text.replace(content, rf"\ {marker}{content}{marker}\ ", 1)
-            return text
+        def render_emphasized_text(rendered_text):
+            visible_text = rendered_text.strip()
+            if visible_text:
+                return rendered_text.replace(
+                    visible_text, rf"\ {marker}{visible_text}{marker}\ ", 1
+                )
+            return rendered_text
 
-        parts = []
-        text = ""
-        for child in token["children"]:
-            if child["type"] in ("text", "softbreak", "standalone_hyperlink"):
-                text += self.render_token(child, state)
+        rendered_parts = []
+        pending_text = ""
+        for child_token in token["children"]:
+            if child_token["type"] in ("text", "softbreak", "standalone_hyperlink"):
+                pending_text += self.render_token(child_token, state)
                 continue
-            parts.append(emphasize(text))
-            text = ""
-            if child["type"] == "link":
+            rendered_parts.append(render_emphasized_text(pending_text))
+            pending_text = ""
+            if child_token["type"] == "link":
                 # A link carries the emphasis itself, since RST cannot nest one
                 # inside the other.
-                parts.append(self.render_link(child, state, emphasis_marker=marker))
+                rendered_parts.append(
+                    self.render_link(child_token, state, emphasis_marker=marker)
+                )
             else:
-                parts.append(self.render_token(child, state))
-        parts.append(emphasize(text))
-        return "".join(parts)
+                rendered_parts.append(self.render_token(child_token, state))
+        rendered_parts.append(render_emphasized_text(pending_text))
+        return "".join(rendered_parts)
 
     def list(self, token: dict[str, Any], state: BlockState) -> str:
         """Render list items with their blocks in source order."""
@@ -636,10 +644,10 @@ class RestRenderer(RSTRenderer):
         if not cells:
             return ""
 
-        result = "   * - " + self.render_children(cells[0], state).strip() + "\n"
+        rendered_row = "   * - " + self.render_children(cells[0], state).strip() + "\n"
         for cell in cells[1:]:
-            result += "     - " + self.render_children(cell, state).strip() + "\n"
-        return result
+            rendered_row += "     - " + self.render_children(cell, state).strip() + "\n"
+        return rendered_row
 
     def table_body(self, token, state):
         return self.render_children(token, state)
@@ -650,25 +658,30 @@ class RestRenderer(RSTRenderer):
     def footnote_ref(self, token, state):
         """Render an automatically numbered RST footnote reference."""
         # Key can be in attrs or directly in raw
-        attrs = token.get("attrs", {})
-        key = token.get("raw", attrs.get("key", str(attrs.get("index", ""))))
+        footnote_attributes = token.get("attrs", {})
+        footnote_key = token.get(
+            "raw",
+            footnote_attributes.get("key", str(footnote_attributes.get("index", ""))),
+        )
         # Normalize to lowercase: mistune v3 uppercases footnote keys internally
-        key = key.lower()
-        return rf"\ [#fn-{key}]_\ "
+        footnote_key = footnote_key.lower()
+        return rf"\ [#fn-{footnote_key}]_\ "
 
     def footnote_item(self, token, state):
         """Render an RST footnote definition."""
-        attrs = token.get("attrs", {})
-        key = attrs.get("key", str(attrs.get("index", "")))
+        footnote_attributes = token.get("attrs", {})
+        footnote_key = footnote_attributes.get(
+            "key", str(footnote_attributes.get("index", ""))
+        )
         # Normalize to lowercase: mistune v3 uppercases footnote keys internally
-        key = key.lower()
-        content = self.render_children(token, state).strip()
-        return f".. [#fn-{key}] {content}\n"
+        footnote_key = footnote_key.lower()
+        rendered_footnote = self.render_children(token, state).strip()
+        return f".. [#fn-{footnote_key}] {rendered_footnote}\n"
 
     def footnotes(self, token, state):
-        content = self.render_children(token, state)
-        if content:
-            return "\n\n" + content
+        rendered_footnotes = self.render_children(token, state)
+        if rendered_footnotes:
+            return "\n\n" + rendered_footnotes
         return ""
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
