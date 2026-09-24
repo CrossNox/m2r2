@@ -17,9 +17,6 @@ from mistune.renderers.rst import RSTRenderer
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
 
-#: Hex characters of the hash used to name a substitution.
-SUBSTITUTION_NAME_HASH_LENGTH = 12
-
 
 class VisibleHtmlTextParser(HTMLParser):
     """Collect visible text from HTML fragments."""
@@ -55,13 +52,6 @@ _RAW_HTML_MERGE_PATTERN = re.compile(
     rf"((?:\\[^\n]|[^\\\n`*|])+?)\\ :{RAW_HTML_ROLE_NAME}:`([^`]+)`"
 )
 
-_REFERENCE_ROLE_NAMES = frozenset(
-    "any doc download eq numref ref term token keyword option envvar "
-    "mod func data const class meth attr exc obj "
-    "member var type macro enumerator struct union enum expr "
-    "function method attribute module directive role".split()
-)
-
 
 def record_role_definition(
     state: BlockState, role_name: str, role_definition: str
@@ -83,7 +73,7 @@ def define_substitution(
     """
     content_to_hash = directive if target_url is None else f"{directive}\n{target_url}"
     digest = sha256(content_to_hash.encode("utf-8")).hexdigest()
-    substitution_name = f"{name_prefix}-{digest[:SUBSTITUTION_NAME_HASH_LENGTH]}"
+    substitution_name = f"{name_prefix}-{digest[:12]}"
     substitution_definition = f".. |{substitution_name}| {directive}"
     if target_url is not None:
         substitution_definition += f"\n.. _{substitution_name}: {target_url}"
@@ -158,7 +148,16 @@ def extract_visible_rst_token_text(token: dict[str, Any]) -> str:
     """
     prefix, body, suffix = str(token["text"]).split("`", 2)
     role_name = (prefix + suffix).strip(":").split(":")[-1]
-    if token["type"] == "rest_link" or role_name in _REFERENCE_ROLE_NAMES:
+    if (
+        token["type"] == "rest_link"
+        or role_name
+        in (
+            "any doc download eq numref ref term token keyword option envvar "
+            "mod func data const class meth attr exc obj "
+            "member var type macro enumerator struct union enum expr "
+            "function method attribute module directive role"
+        ).split()
+    ):
         title, separator, target = body.rpartition(" <")
         if separator != "" and target.endswith(">"):
             return title

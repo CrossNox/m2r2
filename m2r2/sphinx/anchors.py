@@ -23,11 +23,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-#: Unicode categories GitHub keeps in an anchor: letters, marks, numbers, and
-#: connector punctuation such as the underscore.
-_KEPT_CATEGORY_PREFIXES = ("L", "M", "N")
-_KEPT_CATEGORIES = ("Pc",)
-
 
 def slugify_heading_like_github(title: str) -> str:
     """Generate a GitHub-style heading slug without a collision suffix."""
@@ -35,8 +30,8 @@ def slugify_heading_like_github(title: str) -> str:
         character
         for character in title.lower()
         if character in (" ", "-")
-        or unicodedata.category(character).startswith(_KEPT_CATEGORY_PREFIXES)
-        or unicodedata.category(character) in _KEPT_CATEGORIES
+        or unicodedata.category(character).startswith(("L", "M", "N"))
+        or unicodedata.category(character) == "Pc"
     )
     return kept.replace(" ", "-")
 

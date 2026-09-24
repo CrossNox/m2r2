@@ -10,7 +10,6 @@ from mistune.plugins.formatting import strikethrough
 from mistune.plugins.table import table
 
 from m2r2.rst.plugins import (
-    LITERAL_UNDERSCORE_PATTERN,
     configure_markdown_parser_for_rst,
     parse_literal_underscore,
 )
@@ -60,7 +59,7 @@ class BaseM2R2:
             if no_underscore_emphasis:
                 md.inline.register(
                     "literal_underscore",
-                    LITERAL_UNDERSCORE_PATTERN,
+                    r"_+",
                     parse_literal_underscore,
                     before="emphasis",
                 )

@@ -1,4 +1,3 @@
-from hashlib import sha256
 from unittest import TestCase, skip
 from unittest.mock import patch
 
@@ -2171,16 +2170,6 @@ Text[^1].
 class TestSubstitutionNames(TestCase):
     """Substitutions are named after a hash of what they define."""
 
-    def find_directives_sharing_a_one_character_hash(self):
-        directives_by_digest = {}
-        for number in range(100):
-            directive = f"image:: {number}.png"
-            digest = sha256(directive.encode("utf-8")).hexdigest()[:1]
-            if digest in directives_by_digest:
-                return directives_by_digest[digest], directive
-            directives_by_digest[digest] = directive
-        raise AssertionError("no two directives shared a one character hash")
-
     def test_name_holds_twelve_hex_characters(self):
         out = convert("see ![A](a.png) here\n")
         self.assertRegex(out, r"\.\. \|m2r-image-[0-9a-f]{12}\| image:: a\.png")
@@ -2190,9 +2179,9 @@ class TestSubstitutionNames(TestCase):
         self.assertEqual(out.count("image:: a.png"), 1)
 
     def test_colliding_names_raise(self):
-        first, second = self.find_directives_sharing_a_one_character_hash()
         state = BlockState()
-        with patch.object(renderer_module, "SUBSTITUTION_NAME_HASH_LENGTH", 1):
-            define_substitution(state, "m2r-image", first)
+        with patch.object(renderer_module, "sha256") as hash_content:
+            hash_content.return_value.hexdigest.return_value = "0" * 64
+            define_substitution(state, "m2r-image", "image:: first.png")
             with self.assertRaises(SubstitutionNameCollision):
-                define_substitution(state, "m2r-image", second)
+                define_substitution(state, "m2r-image", "image:: second.png")

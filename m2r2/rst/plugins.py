@@ -7,44 +7,11 @@ from typing import Any, Literal
 from mistune import BlockParser
 from mistune.core import BlockState, InlineState
 
-# Multiline directive: starts with .., continues with indented lines
-# Blank lines within indented content are part of the directive
-# The directive ends when we hit a non-indented, non-blank line
-DIRECTIVE_PATTERN = (
-    r"^(?P<directive_multiline>"
-    r" *\.\..*\n"
-    r"(?:"
-    r"(?:[ \t]+.*\n)"
-    r"|"
-    r"(?:[ \t]*\n(?=[ \t\n]*[ \t]))"  # Blank line(s) only if eventually followed by indented line
-    r")*"
-    r"(?:[ \t]*\n(?=[ \t]*$|[ \t]*\n*$))?"  # Trailing blank line only if at end of input
-    r")"
-)
-
-ONELINE_DIRECTIVE_PATTERN = r"^(?P<directive_oneline> *\.\.[^\n]*)$"
-RST_LITERAL_BLOCK_MARKER_PATTERN = r"^(?P<code_block>::\s*)$"
-
 VISUAL_LIST_PATTERN = (
     r"^(?P<visual_list_spaces> *)"
     r"(?P<visual_list_marker>[*+\-]|\d{1,9}[.)])"
     r"(?P<visual_list_content>[ \t]*|[ \t].+)$"
 )
-
-REST_ROLE_PATTERN = r":.*?:`.*?`|`[^`]+`:.*?:"
-REST_LINK_PATTERN = r"`[^`]*?`_"
-RST_FOOTNOTE_REF_PATTERN = r"\[[#][^\]]+\]_"
-INLINE_MATH_PATTERN = r"`\$(?P<math>.*?)\$`"
-# Bare dollar delimiters cannot touch whitespace or close before a digit.
-# Escaped characters stay inside the expression. Double dollars are not inline math.
-DOLLAR_INLINE_MATH_PATTERN = (
-    r"(?<!\$)\$(?!\$)(?:"
-    r"`(?P<quoted_math>(?:\\[^\n]|[^\\`\n])+?)`\$(?!\$)"
-    r"|(?![\s`])(?P<math>(?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])"
-    r")"
-)
-EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
-LITERAL_UNDERSCORE_PATTERN = r"_+"
 
 
 def parse_block_quote_with_github_alert(
@@ -264,31 +231,52 @@ def configure_markdown_parser_for_rst(
     markdown.inline.register("auto_link", None, parse_autolink)
     markdown.inline.register("auto_email", None, parse_autolink)
 
-    # Register directive parsers before indent_code so indented directives are recognized
+    # Multiline directives include indented content and blank lines within it.
+    # A trailing blank line is included only at the end of input.
     markdown.block.register(
-        "directive", DIRECTIVE_PATTERN, parse_directive, before="indent_code"
+        "directive",
+        (
+            r"^(?P<directive_multiline>"
+            r" *\.\..*\n"
+            r"(?:"
+            r"(?:[ \t]+.*\n)"
+            r"|"
+            r"(?:[ \t]*\n(?=[ \t\n]*[ \t]))"
+            r")*"
+            r"(?:[ \t]*\n(?=[ \t]*$|[ \t]*\n*$))?"
+            r")"
+        ),
+        parse_directive,
+        before="indent_code",
     )
     markdown.block.register(
         "oneline_directive",
-        ONELINE_DIRECTIVE_PATTERN,
+        r"^(?P<directive_oneline> *\.\.[^\n]*)$",
         parse_oneline_directive,
         before="indent_code",
     )
     markdown.block.register(
         "rest_code_block",
-        RST_LITERAL_BLOCK_MARKER_PATTERN,
+        r"^(?P<code_block>::\s*)$",
         parse_rst_literal_block_marker,
         before="paragraph",
     )
 
     if inline_math == "legacy":
         markdown.inline.register(
-            "inline_math", INLINE_MATH_PATTERN, parse_inline_math, before="codespan"
+            "inline_math", r"`\$(?P<math>.*?)\$`", parse_inline_math, before="codespan"
         )
     elif inline_math == "dollar":
+        # Bare dollar delimiters cannot touch whitespace or close before a digit.
+        # Escapes stay inside the expression, and double dollars are excluded.
         markdown.inline.register(
             "inline_math",
-            DOLLAR_INLINE_MATH_PATTERN,
+            (
+                r"(?<!\$)\$(?!\$)(?:"
+                r"`(?P<quoted_math>(?:\\[^\n]|[^\\`\n])+?)`\$(?!\$)"
+                r"|(?![\s`])(?P<math>(?:\\[^\n]|[^\\$`\n])+?)(?<!\s)\$(?![\d$])"
+                r")"
+            ),
             parse_dollar_inline_math,
             before="codespan",
         )
@@ -297,20 +285,20 @@ def configure_markdown_parser_for_rst(
 
     # Recognize RST syntax before Markdown code spans.
     markdown.inline.register(
-        "rest_role", REST_ROLE_PATTERN, parse_rest_role, before="codespan"
+        "rest_role", r":.*?:`.*?`|`[^`]+`:.*?:", parse_rest_role, before="codespan"
     )
     markdown.inline.register(
-        "rest_link", REST_LINK_PATTERN, parse_rest_link, before="codespan"
+        "rest_link", r"`[^`]*?`_", parse_rest_link, before="codespan"
     )
     markdown.inline.register(
         "rst_footnote_ref",
-        RST_FOOTNOTE_REF_PATTERN,
+        r"\[[#][^\]]+\]_",
         parse_rst_footnote_ref,
         before="codespan",
     )
     markdown.inline.register(
         "eol_literal_marker",
-        EOL_LITERAL_MARKER_PATTERN,
+        r"(?P<spaces>\s+)?::\s*$",
         parse_eol_literal_marker,
         before="text",
     )
