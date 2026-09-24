@@ -152,14 +152,6 @@ def parse_dollar_inline_math(inline, match: Match[str], state: InlineState):
     return match.end()
 
 
-def validate_inline_math(inline_math: object) -> None:
-    """Reject unsupported inline math modes."""
-    if inline_math not in ("legacy", "dollar", None):
-        raise ValueError(
-            f"inline_math must be 'legacy', 'dollar', or None, got {inline_math!r}"
-        )
-
-
 def parse_eol_literal_marker(inline, match: Match[str], state: InlineState):
     """Parse an end-of-line literal marker."""
     preceding_whitespace = match.group("spaces")
@@ -265,7 +257,6 @@ def configure_markdown_parser_for_rst(
     markdown, *, inline_math: Literal["legacy", "dollar"] | None = "legacy"
 ):
     """Configure Markdown parsing for conversion to reStructuredText."""
-    validate_inline_math(inline_math)
     markdown.block.register(
         "list", VISUAL_LIST_PATTERN, parse_list_with_visual_indentation
     )

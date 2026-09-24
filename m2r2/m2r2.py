@@ -42,6 +42,11 @@ class BaseM2R2:
             inline_math: Enable inline math with "legacy" or "dollar" syntax, or
                 use None to disable it.
         """
+        if inline_math not in ("legacy", "dollar", None):
+            raise ValueError(
+                f"inline_math must be 'legacy', 'dollar', or None, got {inline_math!r}"
+            )
+
         self.renderer = renderer
 
         if plugins is None:

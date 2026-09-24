@@ -1,7 +1,6 @@
 import warnings
 
 from m2r2.m2r2 import __version__
-from m2r2.rst.plugins import validate_inline_math
 from m2r2.sphinx.directives import MdInclude
 
 
@@ -29,10 +28,11 @@ def validate_inline_math_config(app):
             type="m2r2",
             subtype="deprecated",
         )
-    try:
-        validate_inline_math(app.config.m2r_inline_math)
-    except ValueError as error:
-        raise ConfigError(f"Invalid m2r_inline_math: {error}") from error
+    inline_math = app.config.m2r_inline_math
+    if inline_math not in ("legacy", "dollar", None):
+        raise ConfigError(
+            f"m2r_inline_math must be 'legacy', 'dollar', or None, got {inline_math!r}"
+        )
 
 
 def resolve_deprecated_inline_math(disable_inline_math):
