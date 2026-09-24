@@ -1244,6 +1244,10 @@ before |m2r-image-ed8a5249f9ad| after
 """,
         )
 
+    def test_image_alt_text_ignores_html_tags(self):
+        out = self.conv('![<span title="a>b">alt</span> text](a.png)')
+        self.assertIn(":alt: alt text", out)
+
     def test_image_title(self):
         src = '![alt text](a.png "title")'
         out = self.conv(src)

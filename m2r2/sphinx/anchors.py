@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import unicodedata
 from collections.abc import Iterable
+from html.parser import HTMLParser
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
@@ -13,7 +14,6 @@ from sphinx import addnodes
 from sphinx.util import docname_join, logging
 from sphinx.util.nodes import make_refnode, split_explicit_title
 
-from m2r2.rst.renderer import extract_visible_html_text
 from m2r2.sphinx.constants import DOCUMENT_ANCHOR_ROLE_NAME, IMAGE_ANCHOR_ROLE_NAME
 
 if TYPE_CHECKING:
@@ -22,6 +22,17 @@ if TYPE_CHECKING:
     from sphinx.environment import BuildEnvironment
 
 logger = logging.getLogger(__name__)
+
+
+class VisibleHtmlTextParser(HTMLParser):
+    """Collect heading text from raw HTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
 
 
 def slugify_heading_like_github(title: str) -> str:
@@ -120,7 +131,10 @@ def record_document_anchors(app: Sphinx, doctree: nodes.document) -> None:
 def extract_visible_heading_text(node: nodes.Node) -> str:
     """Return heading text without HTML tags."""
     if isinstance(node, nodes.raw):
-        return extract_visible_html_text(node.astext())
+        parser = VisibleHtmlTextParser()
+        parser.feed(node.astext())
+        parser.close()
+        return "".join(parser.parts)
     if isinstance(node, nodes.Text):
         return node.astext()
     return "".join(extract_visible_heading_text(child) for child in node.children)

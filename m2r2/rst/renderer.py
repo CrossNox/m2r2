@@ -6,7 +6,6 @@ import re
 from collections.abc import Container, Iterable, Iterator
 from contextlib import contextmanager
 from hashlib import sha256
-from html.parser import HTMLParser
 from typing import Any, ClassVar
 from urllib.parse import urlparse
 
@@ -16,25 +15,6 @@ from mistune.renderers.rst import RSTRenderer
 
 RAW_HTML_ROLE_NAME = "raw-html-m2r"
 RAW_HTML_ROLE_DEFINITION = f".. role:: {RAW_HTML_ROLE_NAME}(raw)\n   :format: html"
-
-
-class VisibleHtmlTextParser(HTMLParser):
-    """Collect visible text from HTML fragments."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
-
-    def handle_data(self, data: str) -> None:
-        self.parts.append(data)
-
-
-def extract_visible_html_text(fragment: str) -> str:
-    """Extract visible text from an HTML fragment."""
-    parser = VisibleHtmlTextParser()
-    parser.feed(fragment)
-    parser.close()
-    return "".join(parser.parts)
 
 
 class SubstitutionNameCollision(Exception):
@@ -116,7 +96,8 @@ def flatten_to_plain_text(token: dict[str, Any]) -> str:
     if token_type == "eol_literal_marker":
         return str(token["marker"])
     if token_type == "inline_html":
-        return extract_visible_html_text(str(token["raw"]))
+        # Mistune emits tags separately from their text.
+        return ""
     if token_type in ("softbreak", "linebreak"):
         return " "
     if "children" in token:
