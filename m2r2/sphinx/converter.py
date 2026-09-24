@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 class SphinxRestRenderer(RestRenderer):
     """Render Markdown inside a Sphinx document."""
 
+    unlabeled_code_block_start = "\n::\n\n"
+
     def __init__(
         self,
         document: nodes.document,
@@ -39,10 +41,6 @@ class SphinxRestRenderer(RestRenderer):
             use_mermaid=use_mermaid,
             existing_substitutions=document.substitution_defs,
         )
-
-    def render_unlabeled_code_block(self) -> str:
-        """Open an unlabeled literal block using Sphinx's default lexer."""
-        return "\n::\n\n"
 
     def render_linked_text(
         self, token: dict[str, Any], state: BlockState, emphasis_marker: str

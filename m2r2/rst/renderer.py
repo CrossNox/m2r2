@@ -186,6 +186,7 @@ class RestRenderer(RSTRenderer):
     """Render Markdown tokens as reStructuredText."""
 
     indent = " " * 3
+    unlabeled_code_block_start = "\n.. code-block::\n\n"
     hmarks: ClassVar[dict[int, str]] = {
         1: "=",
         2: "-",
@@ -292,12 +293,8 @@ class RestRenderer(RSTRenderer):
         elif lang:
             first_line = f"\n.. code-block:: {lang}\n\n"
         else:
-            first_line = self.render_unlabeled_code_block()
+            first_line = self.unlabeled_code_block_start
         return first_line + self._indent_block(code_text) + "\n"
-
-    def render_unlabeled_code_block(self) -> str:
-        """Write the directive that opens a code block without a language."""
-        return "\n.. code-block::\n\n"
 
     def directive(self, token, state):
         """Preserve an RST directive and any trailing blank lines."""
@@ -354,15 +351,12 @@ class RestRenderer(RSTRenderer):
             )
 
         destination_parts = urlparse(link_destination)
-        points_inside_project = (
-            destination_parts.scheme == "" and destination_parts.netloc == ""
-        )
-
-        if not points_inside_project or not self.parse_relative_links:
-            return self.render_hyperlink_reference(
-                token, state, link_destination, emphasis_marker
-            )
-        if destination_parts.path == "":
+        if (
+            not self.parse_relative_links
+            or destination_parts.scheme != ""
+            or destination_parts.netloc != ""
+            or destination_parts.path == ""
+        ):
             return self.render_hyperlink_reference(
                 token, state, link_destination, emphasis_marker
             )
