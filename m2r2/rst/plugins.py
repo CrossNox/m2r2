@@ -45,16 +45,16 @@ DOLLAR_INLINE_MATH_PATTERN = (
 )
 EOL_LITERAL_MARKER_PATTERN = r"(?P<spaces>\s+)?::\s*$"
 LITERAL_UNDERSCORE_PATTERN = r"_+"
-GITHUB_ALERT_PATTERN = re.compile(
-    r" {0,4}\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*"
-)
 
 
 def parse_block_quote_with_github_alert(
     block: BlockParser, match: Match[str], state: BlockState
 ) -> int:
     """Recognize GitHub alerts at the start of top-level block quotes."""
-    alert = GITHUB_ALERT_PATTERN.fullmatch(match.group("quote_1"))
+    alert = re.fullmatch(
+        r" {0,4}\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*",
+        match.group("quote_1"),
+    )
     if state.depth() != 0 or alert is None:
         return block.parse_block_quote(match, state)
 
