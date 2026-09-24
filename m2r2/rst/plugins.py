@@ -42,25 +42,15 @@ def parse_block_quote_with_github_alert(
 
 def parse_directive(block, match: Match[str], state: BlockState):
     """Preserve an RST directive."""
-    text = match.group("directive_multiline")
     # Use "raw" to bypass Mistune's inline parser.
-    token = {"type": "directive", "raw": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_oneline_directive(block, match: Match[str], state: BlockState):
-    """Preserve a one-line RST directive."""
-    text = match.group("directive_oneline")
-    token = {"type": "directive", "raw": text}
+    token = {"type": "directive", "raw": match.group(0)}
     state.append_token(token)
     return match.end()
 
 
 def parse_rst_literal_block_marker(block, match: Match[str], state: BlockState):
     """Recognize a standalone :: marker introducing an RST literal block."""
-    token = {"type": "rest_code_block", "raw": ""}
-    state.append_token(token)
+    state.append_token({"type": "rest_code_block"})
     return match.end()
 
 
@@ -77,27 +67,10 @@ def parse_autolink(inline, match: Match[str], state: InlineState):
     return match.end()
 
 
-def parse_rest_role(inline, match: Match[str], state: InlineState):
-    """Preserve an RST role without interpreting its contents."""
-    text = match.group(0)
-    token = {"type": "rest_role", "text": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_rest_link(inline, match: Match[str], state: InlineState):
-    """Preserve an RST link."""
-    text = match.group(0)
-    token = {"type": "rest_link", "text": text}
-    state.append_token(token)
-    return match.end()
-
-
-def parse_rst_footnote_ref(inline, match: Match[str], state: InlineState):
-    """Preserve an RST footnote reference such as [#a]_."""
-    text = match.group(0)
-    token = {"type": "rst_footnote_ref", "text": text}
-    state.append_token(token)
+def parse_rst_inline_token(inline, match: Match[str], state: InlineState):
+    """Preserve an RST inline construct without interpreting its contents."""
+    # Mistune uses the matched outer group as the registered token type.
+    state.append_token({"type": match.lastgroup, "text": match.group(0)})
     return match.end()
 
 
@@ -145,7 +118,7 @@ def parse_list_with_visual_indentation(
     block_interrupt_pattern = block.compile_sc(
         [
             "fenced_code",
-            "atx_heading" if "atx_heading" in block.specification else "axt_heading",
+            "atx_heading",
             "thematic_break",
             "block_quote",
             "list",
@@ -252,7 +225,7 @@ def configure_markdown_parser_for_rst(
     markdown.block.register(
         "oneline_directive",
         r"^(?P<directive_oneline> *\.\.[^\n]*)$",
-        parse_oneline_directive,
+        parse_directive,
         before="indent_code",
     )
     markdown.block.register(
@@ -285,15 +258,18 @@ def configure_markdown_parser_for_rst(
 
     # Recognize RST syntax before Markdown code spans.
     markdown.inline.register(
-        "rest_role", r":.*?:`.*?`|`[^`]+`:.*?:", parse_rest_role, before="codespan"
+        "rest_role",
+        r":.*?:`.*?`|`[^`]+`:.*?:",
+        parse_rst_inline_token,
+        before="codespan",
     )
     markdown.inline.register(
-        "rest_link", r"`[^`]*?`_", parse_rest_link, before="codespan"
+        "rest_link", r"`[^`]*?`_", parse_rst_inline_token, before="codespan"
     )
     markdown.inline.register(
         "rst_footnote_ref",
         r"\[[#][^\]]+\]_",
-        parse_rst_footnote_ref,
+        parse_rst_inline_token,
         before="codespan",
     )
     markdown.inline.register(
