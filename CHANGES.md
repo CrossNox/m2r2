@@ -23,7 +23,8 @@
 * Render empty links as empty references and move footnote references out of link text.
 * Prevent references from nesting inside links. Linked images lose their own targets, and plain link text escapes characters that create RST references.
 * Render strikethrough content as HTML and keep its inline Markdown formatting.
-* Preserve backslashes in text and derive image alt text from plain text.
+* Preserve backslashes in text.
+* Derive image alt text from plain text.
 * Resolve same-page and cross-page links to Markdown headings by their GitHub anchors. Resolve explicit RST labels before generated heading anchors with the same name.
 * Add `start-after`, `end-before`, `lines`, `literal`, `code`, `number-lines`, `name`, and `class` to `mdinclude`. Reject its `parser` option.
 * Track files read by `mdinclude` so Sphinx rebuilds them when they change.
