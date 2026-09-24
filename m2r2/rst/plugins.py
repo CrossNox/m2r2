@@ -6,7 +6,8 @@ from typing import Any, Literal
 
 from mistune import BlockParser
 from mistune.core import BlockState, InlineState
-from mistune.helpers import parse_link_text, parse_link_with_end
+from mistune.helpers import parse_link as parse_link_destination
+from mistune.helpers import parse_link_text
 
 VISUAL_LIST_PATTERN = (
     r"^(?P<visual_list_spaces> *)"
@@ -90,7 +91,7 @@ def parse_link_containing_reference_image(
     if state.src[label_end] != "(":
         return inline.parse_link(match, state)
 
-    attributes, link_end, _ = parse_link_with_end(state.src, label_end + 1)
+    attributes, link_end = parse_link_destination(state.src, label_end + 1)
     if link_end is None:
         return inline.parse_link(match, state)
 
