@@ -27,20 +27,20 @@ class SphinxProjectTestBase(TestCase):
 
     def build_project(self, srcdir, *, freshenv=True, parallel=0):
         """Build HTML and return the app and warning log."""
-        warning = StringIO()
+        warning_log = StringIO()
         app_options = dict(
             buildername="html",
             srcdir=srcdir,
             freshenv=freshenv,
             status=StringIO(),
-            warning=warning,
+            warning=warning_log,
         )
         if parallel > 0:
             app_options["parallel"] = parallel
         app = SphinxTestApp(**app_options)
         self.addCleanup(app.cleanup)
         app.build()
-        return app, warning.getvalue()
+        return app, warning_log.getvalue()
 
     def build_html_project_with_m2r2(self, source_files_by_name, extra_conf_py=""):
         """Create and build a project, returning its app, output path, and warnings."""
