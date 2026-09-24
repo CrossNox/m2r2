@@ -221,26 +221,17 @@ class RestRenderer(RSTRenderer):
                 pending_blank_lines += 1
                 continue
 
-            # Emit pending blank lines in these cases:
-            if pending_blank_lines > 0:
-                if tok["type"] == "directive":
-                    # Always emit blank lines before a directive
-                    for _ in range(pending_blank_lines):
-                        yield "\n"
-                elif prev_tok is not None and prev_tok["type"] == "directive":
-                    # After a directive, only emit if the directive didn't
-                    # already have trailing blank lines (single trailing \n)
-                    prev_raw = prev_tok.get("raw", "")
-                    trailing = len(prev_raw) - len(prev_raw.rstrip("\n"))
-                    if trailing <= 1:
-                        # No trailing blank lines in directive, emit them
-                        for _ in range(pending_blank_lines):
-                            yield "\n"
+            if pending_blank_lines > 0 and (
+                tok["type"] == "directive"
+                or (
+                    prev_tok is not None
+                    and prev_tok["type"] == "directive"
+                    and not prev_tok.get("raw", "").endswith("\n\n")
+                )
+            ):
+                yield "\n" * pending_blank_lines
             pending_blank_lines = 0
 
-            # Maintain parent's contract: each token carries a reference
-            # to the previous non-blank token.  The parent's block_quote()
-            # (and potentially future methods) relies on token["prev"].
             tok["prev"] = prev_tok
             prev_tok = tok
             yield self.render_token(tok, state)
@@ -286,16 +277,12 @@ class RestRenderer(RSTRenderer):
 
     def _raw_html(self, raw, state):
         record_role_definition(state, RAW_HTML_ROLE_NAME, RAW_HTML_ROLE_DEFINITION)
-        # Escape backticks to prevent breaking the RST role syntax
         raw = raw.replace("`", "&#96;")
         return rf"\ :{RAW_HTML_ROLE_NAME}:`{raw}`\ "
 
     def block_code(self, token: dict[str, Any], state: BlockState):
-        # Extract code content from token
         code_text = token.get("raw", "")
-
-        # Extract language from the info string (first word only, e.g. "python title=x" -> "python")
-        info = token.get("attrs", {}).get("info", "") if "attrs" in token else ""
+        info = token.get("attrs", {}).get("info", "")
         lang = info.split()[0] if info else ""
 
         if lang == "math":
@@ -316,28 +303,14 @@ class RestRenderer(RSTRenderer):
         """Preserve an RST directive and any trailing blank lines."""
         text = token.get("raw", "")
 
-        # Count trailing newlines
-        content = text.rstrip("\n")
-        trailing_newlines = len(text) - len(content)
-
-        if trailing_newlines > 1:
-            # Multiple trailing newlines = blank lines, preserve them all
-            return content + "\n" * trailing_newlines
-        else:
-            # Single or no trailing newline - just return content without newline
-            return content
+        return text if text.endswith("\n\n") else text.rstrip("\n")
 
     def rest_role(self, token, state):
-        """Preserve an RST role verbatim."""
+        """Preserve an RST inline construct verbatim."""
         return token.get("text", "")
 
-    def rest_link(self, token, state):
-        """Preserve an RST link verbatim."""
-        return token.get("text", "")
-
-    def rst_footnote_ref(self, token, state):
-        """Preserve an RST footnote reference verbatim."""
-        return token.get("text", "")
+    rest_link = rest_role
+    rst_footnote_ref = rest_role
 
     def inline_math(self, token, state):
         """Render inline math as an RST math role."""
@@ -448,11 +421,7 @@ class RestRenderer(RSTRenderer):
 
     def heading(self, token, state):
         """Render a heading with an underline sized to its display width."""
-        # Extract level from token attrs in mistune v3
-        if "attrs" in token and "level" in token["attrs"]:
-            level = token["attrs"]["level"]
-        else:
-            level = token.get("level", 1)
+        level = token["attrs"]["level"]
 
         with rendering_heading(state):
             text = self.render_children(token, state)
@@ -462,8 +431,7 @@ class RestRenderer(RSTRenderer):
             # Use column_width for proper multibyte character counting
             width = column_width(text)
             return f"\n{text}\n{mark * width}\n"
-        else:
-            return f"\n{text}\n"
+        return f"\n{text}\n"
 
     def rest_code_block(self, token, state):
         """Consume a standalone literal block marker without rendering it."""
@@ -661,26 +629,12 @@ class RestRenderer(RSTRenderer):
     def table(self, token, state):
         """Render a table as an RST list-table directive."""
         children = token.get("children", [])
-        head_content = ""
-        body_content = ""
+        has_header = any(child["type"] == "table_head" for child in children)
+        header_option = "   :header-rows: 1\n\n" if has_header else "\n"
+        body = self.render_children(token, state)
+        return f"\n.. list-table::\n{header_option}{body}\n"
 
-        for child in children:
-            if child["type"] == "table_head":
-                head_content = self.table_head(child, state)
-            elif child["type"] == "table_body":
-                body_content = self.table_body(child, state)
-
-        result = "\n.. list-table::\n"
-        if head_content:
-            result += "   :header-rows: 1\n\n"
-            result += head_content
-        else:
-            result += "\n"
-        result += body_content
-        result += "\n"
-        return result
-
-    def _table_row_head_helper(self, token, state):
+    def table_head(self, token, state):
         """Render table cells as a row in an RST list-table."""
         cells = token.get("children", [])
         if not cells:
@@ -691,17 +645,10 @@ class RestRenderer(RSTRenderer):
             result += "     - " + self.render_children(cell, state).strip() + "\n"
         return result
 
-    def table_head(self, token, state):
-        return self._table_row_head_helper(token, state)
-
     def table_body(self, token, state):
-        result = ""
-        for row in token.get("children", []):
-            result += self.table_row(row, state)
-        return result
+        return self.render_children(token, state)
 
-    def table_row(self, token, state):
-        return self._table_row_head_helper(token, state)
+    table_row = table_head
 
     # Footnote rendering methods
     def footnote_ref(self, token, state):
@@ -724,9 +671,7 @@ class RestRenderer(RSTRenderer):
 
     def footnotes(self, token, state):
         content = self.render_children(token, state)
-        if content:
-            return "\n\n" + content
-        return ""
+        return "\n\n" + content if content else ""
 
     def finalize_document(self, rendered_body: str, markdown_state: BlockState) -> str:
         """Assemble the rendered document with its required definitions."""
