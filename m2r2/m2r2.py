@@ -129,7 +129,7 @@ def convert(
             use None to disable it.
         parse_relative_links: Convert relative document links to ``:doc:`` roles.
         anonymous_references: Use anonymous RST references for plain link text.
-        use_mermaid: Render mermaid code blocks as directives.
+        use_mermaid: Render Mermaid code blocks as directives.
 
     Returns:
         The converted reStructuredText string.

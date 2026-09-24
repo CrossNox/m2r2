@@ -29,10 +29,11 @@ def parse_from_file(
         file: Path to the Markdown file.
         encoding: File encoding. Defaults to "utf-8".
         no_underscore_emphasis: Disable underscore-based emphasis.
-        inline_math: Select legacy or dollar math syntax, or None to disable it.
+        inline_math: Enable inline math with "legacy" or "dollar" syntax, or
+            use None to disable it.
         parse_relative_links: Convert relative document links to ``:doc:`` roles.
         anonymous_references: Use anonymous RST references for plain link text.
-        use_mermaid: Render mermaid code blocks as directives.
+        use_mermaid: Render Mermaid code blocks as directives.
 
     Returns:
         The converted reStructuredText content.
