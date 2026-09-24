@@ -6,7 +6,7 @@ import os
 import unicodedata
 from collections.abc import Iterable
 from html.parser import HTMLParser
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
 from docutils import nodes, utils
@@ -20,6 +20,13 @@ if TYPE_CHECKING:
     from docutils.parsers.rst.states import Inliner
     from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
+
+    class M2R2BuildEnvironment(BuildEnvironment):
+        """Describe anchor data stored on the Sphinx build environment."""
+
+        m2r2_document_anchors: dict[str, dict[str, str]]
+        m2r2_document_anchor_references: dict[str, dict[tuple[str, str], str | None]]
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,22 +78,24 @@ def get_or_create_document_anchor_map(
     env: BuildEnvironment,
 ) -> dict[str, dict[str, str]]:
     """Get or create the map from document anchors to element ids."""
+    anchor_env = cast("M2R2BuildEnvironment", env)
     try:
-        return env.m2r2_document_anchors
+        return anchor_env.m2r2_document_anchors
     except AttributeError:
-        env.m2r2_document_anchors = {}
-        return env.m2r2_document_anchors
+        anchor_env.m2r2_document_anchors = {}
+        return anchor_env.m2r2_document_anchors
 
 
 def get_or_create_document_anchor_references(
     env: BuildEnvironment,
 ) -> dict[str, dict[tuple[str, str], str | None]]:
     """Return the anchor references and their last resolved IDs for each document."""
+    anchor_env = cast("M2R2BuildEnvironment", env)
     try:
-        return env.m2r2_document_anchor_references
+        return anchor_env.m2r2_document_anchor_references
     except AttributeError:
-        env.m2r2_document_anchor_references = {}
-        return env.m2r2_document_anchor_references
+        anchor_env.m2r2_document_anchor_references = {}
+        return anchor_env.m2r2_document_anchor_references
 
 
 def normalize_target_document_path(

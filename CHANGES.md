@@ -1,9 +1,13 @@
+### Version 2.1.0 (2026-09-24)
+
+* Support Mistune 3.3.
+
 ### Version 2.0.0 (2026-09-24)
 
 #### Breaking changes
 
 * Replace the Python `disable_inline_math` argument with `inline_math`, accepting `"legacy"`, `"dollar"`, or `None`.
-* Require Mistune 3.2 or newer so footnote rendering shares document definitions.
+* Require Mistune 3.2 so footnote rendering shares document definitions.
 * Remove the `renderer` argument from `M2R2`. `SphinxM2R2` constructs a converter from a docutils document for Sphinx integrations.
 * Make `RestRenderer` render only the document body when it is used directly with Mistune. `M2R2` writes the role and substitution definitions for a complete document.
 * Shorten generated substitution names to a type prefix and twelve hexadecimal hash characters.

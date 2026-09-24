@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from mistune import BlockParser
 from mistune.core import BlockState, InlineState
+from mistune.helpers import parse_link_text, parse_link_with_end
 
 VISUAL_LIST_PATTERN = (
     r"^(?P<visual_list_spaces> *)"
@@ -25,8 +26,13 @@ def parse_block_quote_with_github_alert(
     if state.depth() != 0 or alert_match is None:
         return block.parse_block_quote(match, state)
 
-    quote_text, end_position = block.extract_block_quote(match, state)
-    alert_state = state.child_state(quote_text.partition("\n")[2])
+    quote_text, end_position, lazy_line_starts = block.extract_block_quote(match, state)
+    marker_line, separator, alert_text = quote_text.partition("\n")
+    marker_length = len(marker_line) + len(separator)
+    alert_state = state.child_state(
+        alert_text,
+        lazy_line_starts={position - marker_length for position in lazy_line_starts},
+    )
     block.parse(alert_state, block.block_quote_rules)
     alert_token = {
         "type": "github_alert",
@@ -65,6 +71,40 @@ def parse_autolink(inline, match: Match[str], state: InlineState):
     token = {"type": "standalone_hyperlink", "raw": text[1:-1]}
     state.append_token(token)
     return match.end()
+
+
+def parse_link_containing_reference_image(
+    inline, match: Match[str], state: InlineState
+) -> int | None:
+    """Parse a link whose only label content is a reference image."""
+    if (
+        state.in_link
+        or match.group(0) != "["
+        or not state.src.startswith("![", match.end())
+    ):
+        return inline.parse_link(match, state)
+
+    label_text, label_end = parse_link_text(state.src, match.end())
+    if label_text is None or label_end >= len(state.src):
+        return inline.parse_link(match, state)
+    if state.src[label_end] != "(":
+        return inline.parse_link(match, state)
+
+    attributes, link_end, _ = parse_link_with_end(state.src, label_end + 1)
+    if link_end is None:
+        return inline.parse_link(match, state)
+
+    label_state = state.copy()
+    label_state.src = label_text
+    label_state.in_link = True
+    children = inline.render(label_state)
+    if len(children) != 1 or children[0]["type"] != "image":
+        return inline.parse_link(match, state)
+    if "ref" not in children[0]:
+        return inline.parse_link(match, state)
+
+    state.append_token({"type": "link", "children": children, "attrs": attributes})
+    return link_end
 
 
 def parse_rst_inline_token(inline, match: Match[str], state: InlineState):
@@ -201,6 +241,7 @@ def configure_markdown_parser_for_rst(
         "list", VISUAL_LIST_PATTERN, parse_list_with_visual_indentation
     )
     markdown.block.register("block_quote", None, parse_block_quote_with_github_alert)
+    markdown.inline.register("link", None, parse_link_containing_reference_image)
     markdown.inline.register("auto_link", None, parse_autolink)
     markdown.inline.register("auto_email", None, parse_autolink)
 

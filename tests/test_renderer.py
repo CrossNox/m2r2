@@ -1185,6 +1185,13 @@ class TestImage(RendererTestBase):
 """
         self.assertEqual(self.conv(source), expected)
 
+    def test_reference_image_link_inside_html_link_remains_literal(self):
+        source = '<a href="outer">[![A][img]](page.html)</a>\n\n[img]: a.png'
+        output = self.conv(source)
+
+        self.assertIn(":target: a.png", output)
+        self.assertNotIn(":target: page.html", output)
+
     def test_inline_image(self):
         source = """\
 # ![A](a.png)
