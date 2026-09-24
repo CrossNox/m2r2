@@ -178,41 +178,48 @@ def create_document_anchor_reference(
     content: list[str] | None = None,
 ) -> tuple[list[nodes.Node], list[nodes.system_message]]:
     """Create a pending anchor reference with its source document context."""
-    has_title, role_title, link_destination = split_explicit_title(utils.unescape(text))
+    unescaped_text = utils.unescape(text)
+    has_title, role_title, link_destination = split_explicit_title(unescaped_text)
     destination_path, _, anchor_fragment = link_destination.partition("#")
+
     env = inliner.document.settings.env
     link_source_docname = env.docname
+
     if destination_path != "":
         markdown_source_path = inliner.reporter.get_source_and_line(lineno)[0]
         if markdown_source_path is None:
             raise ValueError("Cannot resolve an anchor link without a source path")
+
         source_relative_path = os.path.relpath(markdown_source_path, env.srcdir)
         link_source_docname = os.path.splitext(source_relative_path)[0].replace(
             os.sep, "/"
         )
+
     target_docname = normalize_target_document_path(
         link_source_docname, destination_path
     )
-    document_anchor_references = get_or_create_document_anchor_references(
-        env
-    ).setdefault(env.docname, {})
+
+    references_by_document = get_or_create_document_anchor_references(env)
+    document_anchor_references = references_by_document.setdefault(env.docname, {})
     document_anchor_references[target_docname, unquote(anchor_fragment)] = None
+
     pending_anchor_reference = addnodes.pending_xref(
         rawtext,
         refdomain="",
         reftype=name,
         reftarget=link_destination,
         refexplicit=has_title,
-        refdoc=inliner.document.settings.env.docname,
+        refdoc=env.docname,
         refsource=link_source_docname,
     )
+
     if name == IMAGE_ANCHOR_ROLE_NAME:
         image_substitution_definition = inliner.document.substitution_defs[role_title]
-        pending_anchor_reference += next(
-            image_substitution_definition.findall(nodes.image)
-        ).deepcopy()
+        image_node = next(image_substitution_definition.findall(nodes.image)).deepcopy()
+        pending_anchor_reference += image_node
     else:
         pending_anchor_reference += nodes.inline(role_title, role_title)
+
     return [pending_anchor_reference], []
 
 
