@@ -4,8 +4,8 @@ from m2r2.m2r2 import __version__
 from m2r2.sphinx.directives import MdInclude
 
 
-def warn_deprecated_config(app):
-    """Warn when the deprecated emphasis option is enabled."""
+def validate_sphinx_config(app):
+    """Validate converter settings and warn about deprecated Sphinx options."""
     if app.config.no_underscore_emphasis:
         warnings.warn(
             "The 'no_underscore_emphasis' config value is deprecated. "
@@ -14,9 +14,6 @@ def warn_deprecated_config(app):
             stacklevel=2,
         )
 
-
-def validate_inline_math_config(app):
-    """Validate math syntax and warn about the deprecated Sphinx alias."""
     from sphinx.errors import ConfigError
     from sphinx.util import logging
 
@@ -78,8 +75,7 @@ def setup(app):
         "sphinxcontrib.mermaid" in app.config.extensions,
         "env",
     )
-    app.connect("builder-inited", warn_deprecated_config)
-    app.connect("builder-inited", validate_inline_math_config)
+    app.connect("builder-inited", validate_sphinx_config)
     app.add_directive("mdinclude", MdInclude)
     register_document_anchors(app)
     return {
