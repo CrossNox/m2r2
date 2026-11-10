@@ -324,3 +324,25 @@ graph TD
         self.assertEqual(p.returncode, 0, msg=p.stderr)
         expected = test_rst.read_text()
         self.assertEqual(p.stdout.strip(), expected.strip())
+
+class TestNonUtf8Input(TestCase):
+    """A non-UTF-8 input file must not crash the CLI with a traceback."""
+
+    def test_non_utf8_input_reports_clean_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            bad = tmppath / "latin1.md"
+            bad.write_bytes("# Caf\xe9\n".encode("latin-1"))
+            good = tmppath / "ok.md"
+            good.write_text("# Title\n")
+
+            stdout, stderr = StringIO(), StringIO()
+            with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
+                with self.assertRaises(SystemExit) as cm:
+                    main(["--dry-run", str(bad), str(good)])
+
+            self.assertEqual(cm.exception.code, 1)
+            self.assertIn("UTF-8", stderr.getvalue())
+            self.assertNotIn("Traceback", stderr.getvalue())
+            # The remaining file is still processed despite the bad one.
+            self.assertIn("Title", stdout.getvalue())

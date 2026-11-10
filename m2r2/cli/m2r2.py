@@ -168,19 +168,28 @@ def run_m2r2(args: argparse.Namespace) -> None:
             print(f"Error: No such file exists: {missing_file}", file=sys.stderr)
         sys.exit(1)
 
+    failed = False
     for file in args.input_files:
-        converted_text = parse_from_file(
-            file,
-            no_underscore_emphasis=args.no_underscore_emphasis,
-            parse_relative_links=args.parse_relative_links,
-            anonymous_references=args.anonymous_references,
-            inline_math=None if args.disable_inline_math else args.inline_math,
-            use_mermaid=args.use_mermaid,
-        )
+        try:
+            converted_text = parse_from_file(
+                file,
+                no_underscore_emphasis=args.no_underscore_emphasis,
+                parse_relative_links=args.parse_relative_links,
+                anonymous_references=args.anonymous_references,
+                inline_math=None if args.disable_inline_math else args.inline_math,
+                use_mermaid=args.use_mermaid,
+            )
+        except UnicodeDecodeError as ex:
+            print(f"Error: {file}: cannot decode file as UTF-8: {ex}", file=sys.stderr)
+            failed = True
+            continue
         if args.dry_run:
             print(converted_text)
         else:
             save_to_file(file, converted_text, overwrite=args.overwrite)
+
+    if failed:
+        sys.exit(1)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
